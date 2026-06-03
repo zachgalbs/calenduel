@@ -1,0 +1,211 @@
+/* ─────────────────────────────────────────────────────────────────
+   Study session — calendar event is the session, count-up to a soft goal.
+   Big editorial serif clock, gold accent once the goal is passed.
+   ───────────────────────────────────────────────────────────────── */
+
+.session {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: 0 1.5rem 4rem;
+}
+
+/* Focus mode (session in progress): the calendar is hidden, so the session
+   takes over the viewport — vertically centered, condensed, no scroll. */
+.session[data-focus='true'] {
+  min-height: 100svh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding-top: 1.5rem;
+  padding-bottom: 1.5rem;
+}
+
+/* Cap the live preview so the clock + Stop always stay above the fold. */
+.session[data-focus='true'] .session-stage {
+  max-height: 46svh;
+}
+
+.session h2 {
+  margin: 0 0 2.25rem;
+}
+
+/* ── Live preview (full 16:9, shown while recording) ───────────────── */
+.session-stage {
+  aspect-ratio: 16 / 9;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  overflow: hidden;
+  margin-bottom: 1.75rem;
+}
+
+.session-preview {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+  /* Mirror the webcam so it reads like a mirror, the way people expect. */
+  transform: scaleX(-1);
+}
+
+/* ── Idle: event picker / task + meta ──────────────────────────────── */
+.session-hint {
+  margin: 0 0 1.5rem;
+  font-size: 14px;
+  color: var(--text);
+}
+
+.session-task {
+  font-family: var(--serif);
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  color: var(--text-h);
+  margin: 0 0 0.5rem;
+}
+
+.session-picker {
+  font: inherit;
+  font-family: var(--serif);
+  font-size: clamp(1.5rem, 5vw, 2rem);
+  font-weight: 500;
+  color: var(--text-h);
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--border-strong);
+  padding: 0 1.5rem 0.25rem 0;
+  margin: 0 0 0.5rem;
+  cursor: pointer;
+}
+
+.session-picker:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.session-meta {
+  margin: 0 0 2rem;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+/* ── The hero clock (running + done summary) ───────────────────────── */
+.session-clock {
+  font-family: var(--serif);
+  font-size: clamp(3.5rem, 14vw, 5.5rem);
+  line-height: 1;
+  font-weight: 500;
+  letter-spacing: -0.02em;
+  color: var(--text-h);
+  font-variant-numeric: tabular-nums;
+  margin: 0;
+}
+
+/* Past the goal, the clock goes gold — calm signal you're in overtime. */
+.session-clock[data-over='true'] {
+  color: var(--accent);
+}
+
+.session-goal {
+  margin: 0.9rem 0 0;
+  font-family: var(--mono);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.session-goal .check {
+  color: var(--accent);
+}
+
+/* Progress hairline. Linear 1s transition matches the 1s tick, so it glides. */
+.session-progress {
+  height: 2px;
+  background: var(--border);
+  border-radius: 2px;
+  margin: 1.5rem 0 0;
+  overflow: hidden;
+}
+
+.session-progress-fill {
+  height: 100%;
+  background: var(--accent);
+  width: 0;
+  transition: width 1s linear;
+}
+
+/* ── Buttons ───────────────────────────────────────────────────────── */
+.session button {
+  font: inherit;
+  cursor: pointer;
+  transition:
+    color 0.2s ease,
+    border-color 0.2s ease,
+    background 0.2s ease,
+    filter 0.2s ease;
+}
+
+.session button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.session button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Start / Download — solid gold hero. */
+.session-start {
+  font-size: 14px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--bg);
+  background: var(--accent);
+  border: 1px solid var(--accent);
+  border-radius: 8px;
+  padding: 12px 32px;
+}
+
+.session-start:hover:not(:disabled) {
+  filter: brightness(1.06);
+}
+
+/* Stop / New session — quiet ghost button. */
+.session-stop {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+  padding: 9px 18px;
+  margin-top: 2rem;
+}
+
+.session-stop:hover:not(:disabled) {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+/* Done-state action row. */
+.session-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.session-actions .session-stop {
+  margin-top: 0;
+}
+
+.session .error {
+  margin: 1.5rem 0 0;
+  font-size: 14px;
+  color: var(--error);
+}
