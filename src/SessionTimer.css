@@ -32,6 +32,7 @@
 
 /* ── Live preview (full 16:9, shown while recording) ───────────────── */
 .session-stage {
+  position: relative; /* anchor for the absolutely-positioned face inset */
   aspect-ratio: 16 / 9;
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -40,13 +41,26 @@
   margin-bottom: 1.75rem;
 }
 
-.session-preview {
+/* Shared screen fills the stage — never mirrored, or on-screen text reads
+   backwards. */
+.session-screen {
   width: 100%;
   height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Webcam face, picture-in-picture in the bottom-right, matching the composited
+   output's layout. */
+.session-face {
+  position: absolute;
+  right: 4%;
+  bottom: 5%;
+  width: 25%;
+  border: 2px solid rgba(0, 0, 0, 0.55);
+  border-radius: 4px;
   object-fit: cover;
   display: block;
-  /* Mirror the webcam so it reads like a mirror, the way people expect. */
-  transform: scaleX(-1);
 }
 
 /* ── Idle: event picker / task + meta ──────────────────────────────── */

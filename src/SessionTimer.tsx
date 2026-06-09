@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CalendarEvent } from './googleCalendar'
 import { useSessionClock } from './session/useSessionClock'
 import { useTimelapseRecorder } from './session/useTimelapseRecorder'
@@ -57,7 +57,11 @@ export default function SessionTimer({
   const clock = useSessionClock()
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
-  const { videoRef, stream, begin, end } = useTimelapseRecorder()
+  // onInterrupted = stop the session if the browser's "Stop sharing" is hit.
+  const { faceVideoRef, screenVideoRef, streaming, begin, end } =
+    useTimelapseRecorder(() => handleStop())
+  // Guards the stop path against firing twice (Stop button + screen-share end).
+  const stoppingRef = useRef(false)
 
   // Keep the active-event list fresh while idle. setState lives in the interval
   // callback, not the effect body, so no cascading render.
@@ -98,20 +102,22 @@ export default function SessionTimer({
     setError(null)
     setStatus('starting')
     try {
-      await begin() // requests camera; rejects → session is blocked
+      await begin() // requests screen + camera; rejects → session is blocked
       setLabel(selected.summary ?? 'Study session')
       clock.start(Math.max(0, endMs - Date.now()))
       setStatus('running')
     } catch {
-      setError('Camera access is needed to record your session.')
+      setError('Screen and camera access are needed to record your session.')
       setStatus('idle')
     }
   }
 
   async function handleStop() {
+    if (stoppingRef.current) return // ignore a double-fire (Stop click + share end)
+    stoppingRef.current = true
+    clock.stop()
     setStatus('encoding')
     const blob = await end()
-    clock.stop()
     setClip(blob)
     setStatus('done')
   }
@@ -121,6 +127,7 @@ export default function SessionTimer({
     setClip(null)
     setError(null)
     setNow(Date.now())
+    stoppingRef.current = false
     setStatus('idle')
   }
 
@@ -139,12 +146,20 @@ export default function SessionTimer({
     <section className="session" data-focus={inProgress}>
       {heading && <h2>{heading}</h2>}
 
-      {/* Full live preview whenever a stream exists (running + encoding). */}
-      {stream && (
+      {/* Screen-dominant preview with the webcam inset, mirroring the recorded
+          output. Shown whenever the feeds are live (running + encoding). */}
+      {streaming && (
         <div className="session-stage">
           <video
-            ref={videoRef}
-            className="session-preview"
+            ref={screenVideoRef}
+            className="session-screen"
+            autoPlay
+            playsInline
+            muted
+          />
+          <video
+            ref={faceVideoRef}
+            className="session-face"
             autoPlay
             playsInline
             muted

@@ -1,4 +1,4 @@
-// Browser camera capture via getUserMedia.
+// Browser capture: camera (getUserMedia) and screen (getDisplayMedia).
 //
 // Video-only by design: the end product is a silent timelapse, so we never
 // request the microphone — one less permission prompt, and no audio track to
@@ -13,24 +13,19 @@ export async function startCamera(): Promise<MediaStream> {
   return navigator.mediaDevices.getUserMedia({ video: true, audio: false })
 }
 
+// Ask the browser to share a screen, window, or tab. Like the camera this
+// prompts for permission, but it MUST be called straight from a user gesture —
+// awaiting anything first spends the gesture and the call throws. Video only.
+export async function startScreen(): Promise<MediaStream> {
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    throw new Error('Screen capture is not supported in this browser')
+  }
+  return navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+}
+
 // Stop every track so the OS releases the camera and the indicator light turns
 // off. A MediaStream stays "live" until each of its tracks is individually
 // stopped — dropping the reference alone is not enough.
 export function stopStream(stream: MediaStream): void {
   stream.getTracks().forEach((track) => track.stop())
-}
-
-// Browsers disagree on which container/codec they'll record. Prefer MP4 (H.264):
-// it's the format iMessage and most native apps accept, and recent Chrome can
-// record it directly. Fall back to WebM where MP4 recording isn't available.
-// undefined lets MediaRecorder choose. Exported because both live capture and
-// timelapse encoding need it.
-export function pickMimeType(): string | undefined {
-  const candidates = [
-    'video/mp4',
-    'video/webm;codecs=vp9',
-    'video/webm;codecs=vp8',
-    'video/webm',
-  ]
-  return candidates.find((type) => MediaRecorder.isTypeSupported(type))
 }
