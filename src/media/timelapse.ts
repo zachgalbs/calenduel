@@ -7,7 +7,7 @@
 //
 //   speedup = PLAYBACK_FPS / SAMPLE_RATE
 //
-// At 2 sampled frames/sec stamped 33ms apart that's 15×. Because every frame is
+// At 1 sampled frame/sec stamped 33ms apart that's 30×. Because every frame is
 // encoded live as it's sampled, Stop only has to flush the last few frames and
 // finalize the container — near-instant, no matter how long the session ran.
 //
@@ -17,8 +17,8 @@
 
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 
-const SAMPLE_RATE = 2    // frames captured per second of real time
-const PLAYBACK_FPS = 30  // frames shown per second on playback → 15× speedup
+const SAMPLE_RATE = 1    // frames captured per second of real time
+const PLAYBACK_FPS = 30  // frames shown per second on playback → 30× speedup
 const FRAME_DURATION_US = Math.round(1_000_000 / PLAYBACK_FPS) // µs per frame
 // One keyframe every ~2s of output, so scrubbing/seeking the clip works. Frame
 // 0 lands on this too, satisfying the "first frame must be a keyframe" rule.
