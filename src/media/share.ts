@@ -15,8 +15,12 @@ function extensionFor(mimeType: string): string {
   return mimeType.includes('mp4') ? 'mp4' : 'webm'
 }
 
-export function timelapseName(blob: Blob): string {
-  return `calenduel-timelapse.${extensionFor(blob.type)}`
+// Calendar titles are arbitrary text; strip characters that are illegal in
+// filenames (Windows is the strictest: \ / : * ? " < > |) rather than letting
+// each browser mangle them its own way.
+export function timelapseName(blob: Blob, baseName?: string): string {
+  const safe = baseName?.replace(/[\\/:*?"<>|]/g, '-').trim()
+  return `${safe || 'calenduel-timelapse'}.${extensionFor(blob.type)}`
 }
 
 // Web Share requires File objects (not bare Blobs), so wrap it.

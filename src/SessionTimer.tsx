@@ -132,7 +132,7 @@ export default function SessionTimer({
   }
 
   function handleDownload() {
-    if (clip) downloadBlob(clip, timelapseName(clip))
+    if (clip) downloadBlob(clip, timelapseName(clip, label))
   }
 
   // Heading only when it carries information: the task title while a session
