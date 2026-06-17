@@ -1,0 +1,168 @@
+/* ─────────────────────────────────────────────────────────────────
+   History page — session archive, same editorial column.
+   ───────────────────────────────────────────────────────────────── */
+
+.history {
+  width: 100%;
+  max-width: 34rem;
+  margin: 0 auto;
+  padding: clamp(4.5rem, 13vh, 9rem) 1.5rem 6rem;
+}
+
+.history h1 {
+  margin: 0 0 3rem;
+}
+
+.history-hint {
+  font-size: 14px;
+  color: var(--text);
+}
+
+.history-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+/* ── Card ─────────────────────────────────────────────────────── */
+
+.history-card {
+  padding: 1.25rem 0;
+  border-bottom: 1px solid var(--border);
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 1rem;
+  align-items: center;
+}
+
+.history-card:first-child {
+  border-top: 1px solid var(--border);
+}
+
+/* ── Play button ──────────────────────────────────────────────── */
+
+.history-play {
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid var(--border-strong);
+  background: transparent;
+  color: var(--accent);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 0.2s ease, background 0.2s ease;
+}
+
+.history-play:hover:not(:disabled) {
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.history-play:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Inline player ────────────────────────────────────────────── */
+
+.history-player {
+  grid-column: 1 / -1;
+  margin-bottom: 0.5rem;
+}
+
+.history-player video {
+  width: 100%;
+  border-radius: 8px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+}
+
+/* When the player is visible, push info + actions to the next row. */
+.history-card:has(.history-player) {
+  grid-template-columns: 1fr auto;
+}
+
+/* ── Info ─────────────────────────────────────────────────────── */
+
+.history-info {
+  min-width: 0;
+}
+
+.history-task {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--text-h);
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.history-meta {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+  margin-top: 0.25rem;
+}
+
+.history-stats {
+  display: flex;
+  gap: 0.75rem;
+  align-items: baseline;
+  margin-top: 0.35rem;
+}
+
+.history-duration {
+  font-family: var(--mono);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+.history-goal {
+  font-family: var(--mono);
+  font-size: 11px;
+  letter-spacing: 0.02em;
+  color: var(--text);
+}
+
+.history-goal.met {
+  color: var(--accent);
+}
+
+/* ── Action buttons ───────────────────────────────────────────── */
+
+.history-actions {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.history-btn {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-h);
+  background: transparent;
+  border: 1px solid var(--border-strong);
+  border-radius: 6px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: color 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+}
+
+.history-btn:hover {
+  color: var(--accent);
+  border-color: var(--accent);
+  background: var(--accent-bg);
+}
+
+.history-btn.danger:hover {
+  color: var(--error);
+  border-color: var(--error);
+  background: transparent;
+}

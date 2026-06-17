@@ -5,7 +5,10 @@ import {
   type CalendarEvent,
 } from './googleCalendar'
 import SessionTimer from './SessionTimer'
+import History from './History'
 import './App.css'
+
+type Page = 'today' | 'history'
 
 const todayLabel = new Date().toLocaleDateString([], {
   weekday: 'long',
@@ -72,42 +75,71 @@ function App() {
   // is just the session — no event list, no distractions. SessionTimer reports
   // its in-progress state up via onActiveChange.
   const [sessionActive, setSessionActive] = useState(false)
+  const [page, setPage] = useState<Page>('today')
+  const [historyKey, setHistoryKey] = useState(0)
 
   return (
     <>
       {!sessionActive && (
-      <main className="calendar">
-        <h1>Today</h1>
-        <p className="subtitle">{todayLabel}</p>
-
-        {/* Only shown until events load — no Refresh button, since the user can
-            just reload the page (which auto-restores via the cached token). */}
-        {!events && (
-          <button type="button" onClick={handleConnect} disabled={loading}>
-            {loading ? 'Loading…' : 'Connect Google Calendar'}
+        <nav className="nav">
+          <button
+            type="button"
+            className={page === 'today' ? 'nav-link active' : 'nav-link'}
+            onClick={() => setPage('today')}
+          >
+            Today
           </button>
-        )}
-
-        {error && <p className="error">{error}</p>}
-
-        {events && events.length === 0 && (
-          <p className="empty">Nothing on the calendar today.</p>
-        )}
-
-        {events && events.length > 0 && (
-          <ul className="event-list">
-            {events.map((event) => (
-              <li key={event.id}>
-                <span className="event-time">{formatTime(event)}</span>
-                <span className="event-title">{event.summary ?? '(no title)'}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </main>
+          <button
+            type="button"
+            className={page === 'history' ? 'nav-link active' : 'nav-link'}
+            onClick={() => setPage('history')}
+          >
+            Sessions
+          </button>
+        </nav>
       )}
 
-      <SessionTimer events={events} onActiveChange={setSessionActive} />
+      {page === 'today' && (
+        <>
+          {!sessionActive && (
+          <main className="calendar">
+            <h1>Today</h1>
+            <p className="subtitle">{todayLabel}</p>
+
+            {!events && (
+              <button type="button" onClick={handleConnect} disabled={loading}>
+                {loading ? 'Loading…' : 'Connect Google Calendar'}
+              </button>
+            )}
+
+            {error && <p className="error">{error}</p>}
+
+            {events && events.length === 0 && (
+              <p className="empty">Nothing on the calendar today.</p>
+            )}
+
+            {events && events.length > 0 && (
+              <ul className="event-list">
+                {events.map((event) => (
+                  <li key={event.id}>
+                    <span className="event-time">{formatTime(event)}</span>
+                    <span className="event-title">{event.summary ?? '(no title)'}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </main>
+          )}
+
+          <SessionTimer
+            events={events}
+            onActiveChange={setSessionActive}
+            onSessionSaved={() => setHistoryKey((k) => k + 1)}
+          />
+        </>
+      )}
+
+      {page === 'history' && <History key={historyKey} />}
     </>
   )
 }

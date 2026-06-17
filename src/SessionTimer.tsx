@@ -4,6 +4,7 @@ import { useSessionClock } from './session/useSessionClock'
 import { useTimelapseRecorder } from './session/useTimelapseRecorder'
 import { primeAudio } from './session/chime'
 import { downloadBlob, timelapseName } from './media/share'
+import { saveSession } from './db'
 import './SessionTimer.css'
 
 type Status = 'idle' | 'starting' | 'running' | 'encoding' | 'done'
@@ -43,9 +44,11 @@ function isActiveTimed(e: CalendarEvent, nowMs: number): boolean {
 export default function SessionTimer({
   events,
   onActiveChange,
+  onSessionSaved,
 }: {
   events: CalendarEvent[] | null
   onActiveChange: (active: boolean) => void
+  onSessionSaved?: () => void
 }) {
   const [now, setNow] = useState(() => Date.now())
   const [status, setStatus] = useState<Status>('idle')
@@ -54,7 +57,12 @@ export default function SessionTimer({
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
 
+  // Manual timer state
+  const [manualMinutes, setManualMinutes] = useState('')
+  const [manualLabel, setManualLabel] = useState('')
+
   const clock = useSessionClock()
+  const startedAtRef = useRef(0)
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
   // onInterrupted = stop the session if the browser's "Stop sharing" is hit.
@@ -94,22 +102,31 @@ export default function SessionTimer({
     active.find((e) => e.id === selectedId) ?? active[0] ?? null
   const endMs = selected?.end.dateTime ? Date.parse(selected.end.dateTime) : null
 
-  async function handleStart() {
-    if (!selected || endMs === null) return
-    // Unlock audio inside the click gesture, BEFORE the camera await — the
-    // gesture context is gone once we await, and the chime fires later.
+  async function startSession(goalMs: number, sessionLabel: string) {
     primeAudio()
     setError(null)
     setStatus('starting')
     try {
-      await begin() // requests screen + camera; rejects → session is blocked
-      setLabel(selected.summary ?? 'Study session')
-      clock.start(Math.max(0, endMs - Date.now()))
+      await begin()
+      startedAtRef.current = Date.now()
+      setLabel(sessionLabel)
+      clock.start(goalMs)
       setStatus('running')
     } catch {
       setError('Screen and camera access are needed to record your session.')
       setStatus('idle')
     }
+  }
+
+  function handleCalendarStart() {
+    if (!selected || endMs === null) return
+    startSession(Math.max(0, endMs - Date.now()), selected.summary ?? 'Study session')
+  }
+
+  function handleManualStart(minutes?: number) {
+    const mins = minutes ?? Number(manualMinutes)
+    if (!mins || mins <= 0) return
+    startSession(mins * 60_000, manualLabel.trim() || 'Study session')
   }
 
   async function handleStop() {
@@ -118,6 +135,17 @@ export default function SessionTimer({
     clock.stop()
     setStatus('encoding')
     const blob = await end()
+    const validClip = blob && blob.size > 0 ? blob : null
+    await saveSession(
+      {
+        startedAt: startedAtRef.current,
+        task: label,
+        goalMs: clock.goalMs,
+        elapsedMs: clock.elapsedMs,
+      },
+      validClip,
+    )
+    onSessionSaved?.()
     setClip(blob)
     setStatus('done')
   }
@@ -126,6 +154,8 @@ export default function SessionTimer({
     clock.reset()
     setClip(null)
     setError(null)
+    setManualMinutes('')
+    setManualLabel('')
     setNow(Date.now())
     stoppingRef.current = false
     setStatus('idle')
@@ -169,15 +199,6 @@ export default function SessionTimer({
 
       {status === 'idle' && (
         <>
-          {events === null && (
-            <p className="session-hint">
-              Connect your calendar above to start a session.
-            </p>
-          )}
-          {events !== null && active.length === 0 && (
-            <p className="session-hint">No active event.</p>
-          )}
-
           {selected && endMs !== null && (
             <>
               {active.length > 1 ? (
@@ -204,12 +225,48 @@ export default function SessionTimer({
               <button
                 type="button"
                 className="session-start"
-                onClick={handleStart}
+                onClick={handleCalendarStart}
               >
                 Start
               </button>
+
+              <div className="session-divider">
+                <span>or</span>
+              </div>
             </>
           )}
+
+          <div className="session-manual">
+            <div className="session-manual-row">
+              <input
+                type="number"
+                className="session-custom-input"
+                placeholder="30"
+                min={1}
+                value={manualMinutes}
+                onChange={(e) => setManualMinutes(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleManualStart() }}
+              />
+              <span className="session-custom-unit">min</span>
+              <input
+                type="text"
+                className="session-label-input"
+                placeholder="Study session"
+                value={manualLabel}
+                onChange={(e) => setManualLabel(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleManualStart() }}
+              />
+            </div>
+            {manualMinutes && Number(manualMinutes) > 0 && (
+              <button
+                type="button"
+                className="session-start"
+                onClick={() => handleManualStart()}
+              >
+                Start
+              </button>
+            )}
+          </div>
         </>
       )}
 
