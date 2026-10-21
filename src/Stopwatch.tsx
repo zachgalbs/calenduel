@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import './Stopwatch.css'
 
-// Deliberately almost nothing: one number (whole minutes) and one hairline.
-// Seconds are never printed — a single dot crosses the line once a minute,
-// and that's the only motion on the page.
+// Deliberately almost nothing: one big number (whole minutes) with the seconds
+// tucked in small beside it, and one hairline a single dot crosses once a
+// minute.
 const LAP_MS = 60_000
 
 // Just minutes below an hour; h:mm past it.
@@ -14,7 +14,7 @@ function formatMinutes(ms: number): string {
   return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : String(m)
 }
 
-// Full time for screen readers, since the visual hides the seconds.
+// Full time in words for screen readers.
 function spokenTime(ms: number): string {
   const totalSec = Math.floor(ms / 1000)
   return `${Math.floor(totalSec / 60)} minutes ${totalSec % 60} seconds`
@@ -46,6 +46,7 @@ export default function Stopwatch({
   const elapsed =
     startedAt === null ? 0 : Math.max(0, (stoppedAt ?? now) - startedAt)
   const lapPct = ((elapsed % LAP_MS) / LAP_MS) * 100
+  const seconds = String(Math.floor((elapsed % LAP_MS) / 1000)).padStart(2, '0')
 
   return (
     <div
@@ -56,6 +57,7 @@ export default function Stopwatch({
     >
       <span className="stopwatch-minutes" aria-hidden="true">
         {formatMinutes(elapsed)}
+        <span className="stopwatch-seconds">:{seconds}</span>
       </span>
       <span className="stopwatch-line" aria-hidden="true">
         <span className="stopwatch-dot" style={{ left: `${lapPct}%` }} />

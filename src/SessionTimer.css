@@ -16,24 +16,45 @@
   gap: 2.25rem;
 }
 
-/* Focus mode (session in progress): the nav is hidden, so the session takes
-   over the viewport — condensed, no scroll. */
+/* Focus mode (session in progress): the nav is hidden and the live preview
+   takes almost the whole viewport. Below it, a slim control bar: stopwatch
+   on the left, Stop on the right. */
 .session[data-focus='true'] {
-  min-height: 100svh;
-  padding-top: 1.5rem;
-  padding-bottom: 1.5rem;
-  gap: 1.75rem;
+  max-width: none;
+  height: 100svh;
+  padding: 1rem;
+  display: grid;
+  grid-template-columns: 1fr auto;
+  grid-template-rows: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 1rem 1.5rem;
 }
 
-/* With the preview above it, shrink the numeral so the Stop button stays on
-   screen. */
-.session[data-focus='true'] .stopwatch {
-  --size: min(7rem, 18svh);
-}
-
-/* Cap the live preview so the dial + Stop always stay above the fold. */
 .session[data-focus='true'] .session-stage {
-  max-height: 40svh;
+  grid-column: 1 / -1;
+  align-self: stretch;
+  aspect-ratio: auto;
+  min-height: 0;
+}
+
+.session[data-focus='true'] .stopwatch {
+  --size: 2.75rem;
+  width: 9rem;
+  align-items: flex-start;
+  justify-self: start;
+}
+
+/* At bar size the default ratio makes the seconds unreadable. */
+.session[data-focus='true'] .stopwatch-seconds {
+  font-size: 0.4em;
+}
+
+.session[data-focus='true'] .session-actions {
+  justify-self: end;
+}
+
+.session[data-focus='true'] .error {
+  grid-column: 1 / -1;
 }
 
 /* ── Live preview (full 16:9, shown while recording) ───────────────── */

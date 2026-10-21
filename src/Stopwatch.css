@@ -21,6 +21,14 @@
   color: var(--text-h);
 }
 
+/* Seconds: small and quiet, riding the numeral's baseline. */
+.stopwatch-seconds {
+  font-size: 0.26em;
+  letter-spacing: 0;
+  margin-left: 0.08em;
+  color: var(--text);
+}
+
 /* The hairline is the "seconds hand": a full minute, left to right. */
 .stopwatch-line {
   position: relative;
