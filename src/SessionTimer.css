@@ -25,10 +25,10 @@
   gap: 1.75rem;
 }
 
-/* With the preview above it, shrink the dial so the Stop button stays on
+/* With the preview above it, shrink the numeral so the Stop button stays on
    screen. */
 .session[data-focus='true'] .stopwatch {
-  --dial: min(17rem, 70vw, 34svh);
+  --size: min(7rem, 18svh);
 }
 
 /* Cap the live preview so the dial + Stop always stay above the fold. */

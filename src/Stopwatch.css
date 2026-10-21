@@ -1,117 +1,46 @@
 /* ─────────────────────────────────────────────────────────────────
-   Stopwatch — a watch-face ring that sweeps once a minute, with a big
-   editorial serif readout in the middle. Gold is the only color.
+   Stopwatch — one number, one hairline, one moving dot. Nothing else.
    ───────────────────────────────────────────────────────────────── */
 
 .stopwatch {
-  /* Everything inside scales off this one size. */
-  --dial: min(20rem, 78vw);
-  position: relative;
-  width: var(--dial);
-  aspect-ratio: 1;
-  flex-shrink: 0;
-}
-
-.stopwatch-dial {
-  display: block;
-  width: 100%;
-  height: 100%;
-  overflow: visible;
-}
-
-/* ── Ticks ─────────────────────────────────────────────────────────── */
-.stopwatch-tick {
-  stroke: var(--border-strong);
-  stroke-width: 1.5;
-  stroke-linecap: round;
-  transition: stroke 0.35s ease;
-}
-
-.stopwatch-tick[data-major='true'] {
-  stroke: var(--text-mute);
-  stroke-width: 2;
-}
-
-.stopwatch-tick[data-lit='true'] {
-  stroke: var(--accent);
-}
-
-/* ── Ring ──────────────────────────────────────────────────────────── */
-.stopwatch-track {
-  fill: none;
-  stroke: var(--border);
-  stroke-width: 3;
-}
-
-.stopwatch-arc {
-  fill: none;
-  stroke: var(--accent);
-  stroke-width: 3;
-  stroke-linecap: round;
-}
-
-/* The leading dot, with a soft halo so it reads as the "hand". */
-.stopwatch-tip {
-  fill: var(--accent);
-  stroke: var(--accent-bg);
-  stroke-width: 10;
-  paint-order: stroke;
-}
-
-/* Running: the halo breathes gently. */
-.stopwatch[data-running='true'] .stopwatch-tip {
-  animation: stopwatch-breathe 2s ease-in-out infinite;
-}
-
-@keyframes stopwatch-breathe {
-  50% {
-    stroke-width: 18;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .stopwatch[data-running='true'] .stopwatch-tip {
-    animation: none;
-  }
-}
-
-/* ── Readout ───────────────────────────────────────────────────────── */
-.stopwatch-readout {
-  position: absolute;
-  inset: 0;
+  /* Everything scales off the numeral size. */
+  --size: clamp(6rem, 30vw, 10rem);
   display: flex;
-  align-items: baseline;
-  justify-content: center;
-  /* Optical centering: baseline alignment sits the digits slightly high. */
-  padding-top: calc(var(--dial) * 0.43);
-  pointer-events: none;
+  flex-direction: column;
+  align-items: center;
+  width: min(16rem, 70vw);
 }
 
-.stopwatch-main {
+.stopwatch-minutes {
   font-family: var(--serif);
-  font-size: calc(var(--dial) * 0.2);
-  font-weight: 500;
-  line-height: 1;
-  letter-spacing: -0.02em;
+  font-size: var(--size);
+  font-weight: 400;
+  line-height: 0.85;
+  letter-spacing: -0.04em;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--text-h);
 }
 
-/* Past an hour the string is longer — step down so it stays inside the ring. */
-.stopwatch[data-long='true'] .stopwatch-main {
-  font-size: calc(var(--dial) * 0.155);
+/* The hairline is the "seconds hand": a full minute, left to right. */
+.stopwatch-line {
+  position: relative;
+  align-self: stretch;
+  height: 1px;
+  margin-top: calc(var(--size) * 0.35);
+  background: var(--border);
 }
 
-.stopwatch-hundredths {
-  font-family: var(--mono);
-  font-size: calc(var(--dial) * 0.06);
-  font-variant-numeric: tabular-nums;
-  color: var(--accent);
-  margin-left: 0.15em;
-  min-width: 2.6ch;
+.stopwatch-dot {
+  position: absolute;
+  top: 50%;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--text-mute);
+  transform: translate(-50%, -50%);
 }
 
-/* Idle / stopped: hundredths go quiet. */
-.stopwatch[data-running='false'] .stopwatch-hundredths {
-  color: var(--text-mute);
+/* Only goes gold while it's actually moving. */
+.stopwatch[data-running='true'] .stopwatch-dot {
+  background: var(--accent);
 }
