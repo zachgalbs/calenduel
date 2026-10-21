@@ -2,9 +2,11 @@ import { useEffect, useState } from 'react'
 import './Stopwatch.css'
 
 // Deliberately almost nothing: one big number (whole minutes) with the seconds
-// tucked in small beside it, and one hairline a single dot crosses once a
-// minute.
+// tucked in small beside it.
 const LAP_MS = 60_000
+// Re-read the clock a few times a second so each second flips close to when
+// it actually ticks over (a 1s interval could lag by up to a second).
+const TICK_MS = 250
 
 // Just minutes below an hour; h:mm past it.
 function formatMinutes(ms: number): string {
@@ -32,35 +34,27 @@ export default function Stopwatch({
   const running = startedAt !== null && stoppedAt === null
   const [now, setNow] = useState(() => Date.now())
 
-  // Repaint every animation frame while running so the dot glides. setNow
-  // lives in the rAF callback, not the effect body.
+  // Tick while running. setNow lives in the interval callback, not the effect
+  // body, so no cascading render.
   useEffect(() => {
     if (!running) return
-    let frame = requestAnimationFrame(function tick() {
-      setNow(Date.now())
-      frame = requestAnimationFrame(tick)
-    })
-    return () => cancelAnimationFrame(frame)
+    const id = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(id)
   }, [running])
 
   const elapsed =
     startedAt === null ? 0 : Math.max(0, (stoppedAt ?? now) - startedAt)
-  const lapPct = ((elapsed % LAP_MS) / LAP_MS) * 100
   const seconds = String(Math.floor((elapsed % LAP_MS) / 1000)).padStart(2, '0')
 
   return (
     <div
       className="stopwatch"
-      data-running={running}
       role="timer"
       aria-label={spokenTime(elapsed)}
     >
       <span className="stopwatch-minutes" aria-hidden="true">
         {formatMinutes(elapsed)}
         <span className="stopwatch-seconds">:{seconds}</span>
-      </span>
-      <span className="stopwatch-line" aria-hidden="true">
-        <span className="stopwatch-dot" style={{ left: `${lapPct}%` }} />
       </span>
     </div>
   )

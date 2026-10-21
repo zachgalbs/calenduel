@@ -1,14 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────
-   Stopwatch — one number, one hairline, one moving dot. Nothing else.
+   Stopwatch — just the numbers. Big minutes, small seconds.
    ───────────────────────────────────────────────────────────────── */
 
 .stopwatch {
-  /* Everything scales off the numeral size. */
   --size: clamp(6rem, 30vw, 10rem);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  width: min(16rem, 70vw);
 }
 
 .stopwatch-minutes {
@@ -27,28 +22,4 @@
   letter-spacing: 0;
   margin-left: 0.08em;
   color: var(--text);
-}
-
-/* The hairline is the "seconds hand": a full minute, left to right. */
-.stopwatch-line {
-  position: relative;
-  align-self: stretch;
-  height: 1px;
-  margin-top: calc(var(--size) * 0.35);
-  background: var(--border);
-}
-
-.stopwatch-dot {
-  position: absolute;
-  top: 50%;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--text-mute);
-  transform: translate(-50%, -50%);
-}
-
-/* Only goes gold while it's actually moving. */
-.stopwatch[data-running='true'] .stopwatch-dot {
-  background: var(--accent);
 }

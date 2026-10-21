@@ -44,8 +44,6 @@
 
 .session[data-focus='true'] .stopwatch {
   --size: 2.75rem;
-  width: 9rem;
-  align-items: flex-start;
   justify-self: start;
 }
 
