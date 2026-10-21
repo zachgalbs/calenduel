@@ -26,7 +26,7 @@ export default function SessionTimer({
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
   // onInterrupted = stop the session if the browser's "Stop sharing" is hit.
-  const { faceVideoRef, screenVideoRef, streaming, begin, end } =
+  const { faceVideoRef, streaming, begin, end } =
     useTimelapseRecorder(() => handleStop())
   // Guards the stop path against firing twice (Stop button + screen-share end).
   const stoppingRef = useRef(false)
@@ -89,17 +89,11 @@ export default function SessionTimer({
 
   return (
     <section className="session" data-focus={inProgress}>
-      {/* Screen-dominant preview with the webcam inset, mirroring the recorded
-          output. Shown whenever the feeds are live (running + encoding). */}
+      {/* Camera-only preview. The screen is recorded but never shown — a live
+          preview of your own screen reflects itself forever. Shown whenever
+          the feeds are live (running + encoding). */}
       {streaming && (
         <div className="session-stage">
-          <video
-            ref={screenVideoRef}
-            className="session-screen"
-            autoPlay
-            playsInline
-            muted
-          />
           <video
             ref={faceVideoRef}
             className="session-face"

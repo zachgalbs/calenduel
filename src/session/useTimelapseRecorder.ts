@@ -3,10 +3,14 @@ import { startCamera, startScreen, stopStream } from '../media/capture'
 import { startTimelapse, type TimelapseRecorder } from '../media/timelapse'
 
 // Encapsulates the camera + screen + timelapse lifecycle for a study session.
-// Both streams live in STATE so that setting them mounts the two <video>
-// elements; the effect then attaches the streams and starts frame sampling only
-// once the elements are actually in the DOM. (Attaching in the click handler
-// would race not-yet-mounted refs.)
+// Both streams live in STATE so that setting them mounts the face <video>;
+// the effect then attaches the streams and starts frame sampling only once
+// that element is actually in the DOM. (Attaching in the click handler would
+// race a not-yet-mounted ref.)
+//
+// The screen feed is never shown on the page: a live preview of the screen
+// you're capturing captures itself, an infinite hall of mirrors that also
+// lands in the timelapse. It plays in a detached <video> the sampler reads.
 
 interface Streams {
   face: MediaStream
@@ -15,7 +19,6 @@ interface Streams {
 
 export interface RecorderHandle {
   faceVideoRef: RefObject<HTMLVideoElement | null>
-  screenVideoRef: RefObject<HTMLVideoElement | null>
   // True once both feeds are live — gate the preview on this.
   streaming: boolean
   // Acquire screen + camera and start recording. Rejects if either is denied,
@@ -29,7 +32,6 @@ export interface RecorderHandle {
 // "Stop sharing" UI mid-session — the caller should treat it like pressing Stop.
 export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle {
   const faceVideoRef = useRef<HTMLVideoElement>(null)
-  const screenVideoRef = useRef<HTMLVideoElement>(null)
   const timelapseRef = useRef<TimelapseRecorder | null>(null)
   const [streams, setStreams] = useState<Streams | null>(null)
 
@@ -40,15 +42,21 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     interruptedRef.current = onInterrupted
   }, [onInterrupted])
 
-  // Attach + sample once both <video>s have mounted (effects run post-commit, so
-  // the refs are guaranteed here). Cleanup covers normal stop and unmount, so
+  // Attach + sample once the face <video> has mounted (effects run post-commit,
+  // so the ref is guaranteed here). Cleanup covers normal stop and unmount, so
   // neither the camera light nor the screen share ever lingers.
   useEffect(() => {
     const face = faceVideoRef.current
-    const screen = screenVideoRef.current
-    if (!streams || !face || !screen) return
+    if (!streams || !face) return
     face.srcObject = streams.face
+    // Detached, so it can't appear in its own capture. An explicit play()
+    // (not the autoplay attribute) keeps the browser from pausing it as
+    // "not visible".
+    const screen = document.createElement('video')
+    screen.muted = true
+    screen.playsInline = true
     screen.srcObject = streams.screen
+    void screen.play()
     const timelapse = startTimelapse(face, screen)
     timelapseRef.current = timelapse
 
@@ -61,6 +69,7 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
       screenTrack.removeEventListener('ended', handleEnded)
       timelapse.cancel()
       timelapseRef.current = null
+      screen.srcObject = null
       stopStream(streams.face)
       stopStream(streams.screen)
     }
@@ -97,7 +106,6 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
 
   return {
     faceVideoRef,
-    screenVideoRef,
     streaming: streams !== null,
     begin,
     end,
