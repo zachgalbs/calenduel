@@ -1,68 +1,28 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import type { CalendarEvent } from './googleCalendar'
-import { useSessionClock } from './session/useSessionClock'
+import { useEffect, useRef, useState } from 'react'
+import Stopwatch from './Stopwatch'
 import { useTimelapseRecorder } from './session/useTimelapseRecorder'
-import { primeAudio } from './session/chime'
 import { downloadBlob, timelapseName } from './media/share'
 import { saveSession } from './db'
 import './SessionTimer.css'
 
 type Status = 'idle' | 'starting' | 'running' | 'encoding' | 'done'
 
-// How often (idle only) we recompute which events are active, so an event
-// becoming current flips Start on without a manual refresh.
-const ACTIVE_REFRESH_MS = 30_000
-
-// h:mm:ss past an hour, m:ss below — study sessions routinely run long.
-function formatClock(ms: number): string {
-  const totalSec = Math.floor(ms / 1000)
-  const h = Math.floor(totalSec / 3600)
-  const m = Math.floor((totalSec % 3600) / 60)
-  const s = totalSec % 60
-  const pad = (n: number) => String(n).padStart(2, '0')
-  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
-}
-
-function formatTimeOfDay(ms: number): string {
-  return new Date(ms)
-    .toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })
-    .replace(' AM', ' am')
-    .replace(' PM', ' pm')
-}
-
-// A study-session candidate: a *timed* event (all-day events are excluded —
-// "until midnight" isn't a study goal) happening right now.
-function isActiveTimed(e: CalendarEvent, nowMs: number): boolean {
-  const start = e.start.dateTime
-  const end = e.end.dateTime
-  if (!start || !end) return false
-  const startMs = Date.parse(start)
-  const endMs = Date.parse(end)
-  return startMs <= nowMs && nowMs < endMs
-}
+// Pure stopwatch: no goal, so every session gets the same label.
+const TASK = 'Study session'
 
 export default function SessionTimer({
-  events,
   onActiveChange,
   onSessionSaved,
 }: {
-  events: CalendarEvent[] | null
   onActiveChange: (active: boolean) => void
   onSessionSaved?: () => void
 }) {
-  const [now, setNow] = useState(() => Date.now())
   const [status, setStatus] = useState<Status>('idle')
-  const [selectedId, setSelectedId] = useState<string | null>(null)
-  const [label, setLabel] = useState('') // task title, shown while running/done
+  const [startedAt, setStartedAt] = useState<number | null>(null)
+  const [stoppedAt, setStoppedAt] = useState<number | null>(null)
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  // Manual timer state
-  const [manualMinutes, setManualMinutes] = useState('')
-  const [manualLabel, setManualLabel] = useState('')
-
-  const clock = useSessionClock()
-  const startedAtRef = useRef(0)
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
   // onInterrupted = stop the session if the browser's "Stop sharing" is hit.
@@ -71,22 +31,8 @@ export default function SessionTimer({
   // Guards the stop path against firing twice (Stop button + screen-share end).
   const stoppingRef = useRef(false)
 
-  // Keep the active-event list fresh while idle. setState lives in the interval
-  // callback, not the effect body, so no cascading render.
-  useEffect(() => {
-    if (status !== 'idle') return
-    const id = setInterval(() => setNow(Date.now()), ACTIVE_REFRESH_MS)
-    return () => clearInterval(id)
-  }, [status])
-
-  const active = useMemo(
-    () => (events ?? []).filter((e) => isActiveTimed(e, now)),
-    [events, now],
-  )
-
-  // A session is "in progress" from the moment Start is pressed through saving —
-  // i.e. everything except idle and the post-session review. The parent uses
-  // this to hide the calendar and switch to the condensed full-screen layout.
+  // A session is "in progress" from the moment Start is pressed through saving.
+  // The parent uses this to hide the nav for a distraction-free screen.
   const inProgress =
     status === 'starting' || status === 'running' || status === 'encoding'
 
@@ -96,21 +42,14 @@ export default function SessionTimer({
     onActiveChange(inProgress)
   }, [inProgress, onActiveChange])
 
-  // Derive the selection during render (no effect): honor the user's pick if
-  // it's still active, otherwise fall back to the first active event.
-  const selected =
-    active.find((e) => e.id === selectedId) ?? active[0] ?? null
-  const endMs = selected?.end.dateTime ? Date.parse(selected.end.dateTime) : null
-
-  async function startSession(goalMs: number, sessionLabel: string) {
-    primeAudio()
+  // One click does everything: screen picker, camera, recording, stopwatch.
+  // (getDisplayMedia needs this click's user gesture — it can't run on load.)
+  async function handleStart() {
     setError(null)
     setStatus('starting')
     try {
       await begin()
-      startedAtRef.current = Date.now()
-      setLabel(sessionLabel)
-      clock.start(goalMs)
+      setStartedAt(Date.now())
       setStatus('running')
     } catch {
       setError('Screen and camera access are needed to record your session.')
@@ -118,31 +57,16 @@ export default function SessionTimer({
     }
   }
 
-  function handleCalendarStart() {
-    if (!selected || endMs === null) return
-    startSession(Math.max(0, endMs - Date.now()), selected.summary ?? 'Study session')
-  }
-
-  function handleManualStart(minutes?: number) {
-    const mins = minutes ?? Number(manualMinutes)
-    if (!mins || mins <= 0) return
-    startSession(mins * 60_000, manualLabel.trim() || 'Study session')
-  }
-
   async function handleStop() {
-    if (stoppingRef.current) return // ignore a double-fire (Stop click + share end)
+    if (stoppingRef.current || startedAt === null) return // ignore a double-fire
     stoppingRef.current = true
-    clock.stop()
+    const stopAt = Date.now()
+    setStoppedAt(stopAt) // freezes the stopwatch on the final time
     setStatus('encoding')
     const blob = await end()
     const validClip = blob && blob.size > 0 ? blob : null
     await saveSession(
-      {
-        startedAt: startedAtRef.current,
-        task: label,
-        goalMs: clock.goalMs,
-        elapsedMs: clock.elapsedMs,
-      },
+      { startedAt, task: TASK, goalMs: 0, elapsedMs: stopAt - startedAt },
       validClip,
     )
     onSessionSaved?.()
@@ -151,31 +75,20 @@ export default function SessionTimer({
   }
 
   function handleNewSession() {
-    clock.reset()
+    setStartedAt(null)
+    setStoppedAt(null)
     setClip(null)
     setError(null)
-    setManualMinutes('')
-    setManualLabel('')
-    setNow(Date.now())
     stoppingRef.current = false
     setStatus('idle')
   }
 
   function handleDownload() {
-    if (clip) downloadBlob(clip, timelapseName(clip, label))
+    if (clip) downloadBlob(clip, timelapseName(clip, TASK))
   }
-
-  // Heading only when it carries information: the task title while a session
-  // runs, "Nice work" on completion. Idle shows none — the picker/hint says it.
-  const heading = status === 'done' ? 'Nice work' : status === 'idle' ? null : label
-  const progressPct =
-    clock.goalMs > 0 ? Math.min(100, (clock.elapsedMs / clock.goalMs) * 100) : 0
-  const overMs = Math.max(0, clock.elapsedMs - clock.goalMs)
 
   return (
     <section className="session" data-focus={inProgress}>
-      {heading && <h2>{heading}</h2>}
-
       {/* Screen-dominant preview with the webcam inset, mirroring the recorded
           output. Shown whenever the feeds are live (running + encoding). */}
       {streaming && (
@@ -194,126 +107,39 @@ export default function SessionTimer({
             playsInline
             muted
           />
+          {status === 'running' && <span className="session-rec">Rec</span>}
         </div>
       )}
 
-      {status === 'idle' && (
-        <>
-          {selected && endMs !== null && (
-            <>
-              {active.length > 1 ? (
-                <select
-                  className="session-picker"
-                  value={selected.id}
-                  onChange={(e) => setSelectedId(e.target.value)}
-                >
-                  {active.map((e) => (
-                    <option key={e.id} value={e.id}>
-                      {e.summary ?? '(no title)'}
-                    </option>
-                  ))}
-                </select>
-              ) : (
-                <p className="session-task">{selected.summary ?? '(no title)'}</p>
-              )}
+      <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} />
 
-              <p className="session-meta">
-                ends {formatTimeOfDay(endMs)} ·{' '}
-                {Math.max(0, Math.round((endMs - now) / 60_000))} min left
-              </p>
+      <div className="session-actions">
+        {status === 'idle' && (
+          <button type="button" className="session-start" onClick={handleStart}>
+            Start
+          </button>
+        )}
 
-              <button
-                type="button"
-                className="session-start"
-                onClick={handleCalendarStart}
-              >
-                Start
-              </button>
+        {status === 'starting' && (
+          <button type="button" className="session-start" disabled>
+            Starting…
+          </button>
+        )}
 
-              <div className="session-divider">
-                <span>or</span>
-              </div>
-            </>
-          )}
-
-          <div className="session-manual">
-            <div className="session-manual-row">
-              <input
-                type="number"
-                className="session-custom-input"
-                placeholder="30"
-                min={1}
-                value={manualMinutes}
-                onChange={(e) => setManualMinutes(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleManualStart() }}
-              />
-              <span className="session-custom-unit">min</span>
-              <input
-                type="text"
-                className="session-label-input"
-                placeholder="Study session"
-                value={manualLabel}
-                onChange={(e) => setManualLabel(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter') handleManualStart() }}
-              />
-            </div>
-            {manualMinutes && Number(manualMinutes) > 0 && (
-              <button
-                type="button"
-                className="session-start"
-                onClick={() => handleManualStart()}
-              >
-                Start
-              </button>
-            )}
-          </div>
-        </>
-      )}
-
-      {status === 'starting' && (
-        <button type="button" className="session-start" disabled>
-          Starting…
-        </button>
-      )}
-
-      {status === 'running' && (
-        <>
-          <p className="session-clock" data-over={clock.reachedGoal}>
-            {formatClock(clock.elapsedMs)}
-          </p>
-          <div className="session-progress">
-            <div
-              className="session-progress-fill"
-              style={{ width: `${progressPct}%` }}
-            />
-          </div>
-          <p className="session-goal">
-            {clock.reachedGoal && <span className="check">✓ </span>}
-            goal {formatClock(clock.goalMs)}
-            {clock.reachedGoal && overMs > 0 && ` · +${formatClock(overMs)} over`}
-          </p>
+        {status === 'running' && (
           <button type="button" className="session-stop" onClick={handleStop}>
             Stop
           </button>
-        </>
-      )}
+        )}
 
-      {status === 'encoding' && (
-        <>
-          <p className="session-clock">{formatClock(clock.elapsedMs)}</p>
+        {status === 'encoding' && (
           <button type="button" className="session-stop" disabled>
             Saving…
           </button>
-        </>
-      )}
+        )}
 
-      {status === 'done' && (
-        <>
-          <p className="session-clock" data-over={clock.reachedGoal}>
-            {formatClock(clock.elapsedMs)}
-          </p>
-          <p className="session-goal">of {formatClock(clock.goalMs)} goal</p>
-          <div className="session-actions">
+        {status === 'done' && (
+          <>
             {clip && clip.size > 0 && (
               <button
                 type="button"
@@ -330,9 +156,9 @@ export default function SessionTimer({
             >
               New session
             </button>
-          </div>
-        </>
-      )}
+          </>
+        )}
+      </div>
 
       {error && <p className="error">{error}</p>}
     </section>
