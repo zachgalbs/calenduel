@@ -88,7 +88,11 @@ export default function SessionTimer({
   }
 
   return (
-    <section className="session" data-focus={inProgress}>
+    // Switch to the camera layout only once the feed is live. Keying it to
+    // inProgress would flip it during 'starting', while the permission
+    // prompts are still up, leaving the stopwatch stranded in the bar's left
+    // slot with no camera above it.
+    <section className="session" data-focus={streaming}>
       {/* Camera-only preview. The screen is recorded but never shown — a live
           preview of your own screen reflects itself forever. Shown whenever
           the feeds are live (running + encoding). */}

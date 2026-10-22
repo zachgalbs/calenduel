@@ -16,8 +16,9 @@
   gap: 2.25rem;
 }
 
-/* Focus mode (session in progress): the nav is hidden and the live preview
-   takes almost the whole viewport. Below it, a slim control bar: stopwatch
+/* Focus mode (camera feed live): the nav is hidden and the live preview
+   takes almost the whole viewport. Until the feed is up, the session stays
+   in the centered idle layout. Below it, a slim control bar: stopwatch
    on the left, Stop on the right. */
 .session[data-focus='true'] {
   max-width: none;
