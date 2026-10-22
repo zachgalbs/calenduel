@@ -64,7 +64,6 @@
 /* ── Live preview (full 16:9, shown while recording) ───────────────── */
 .session-stage {
   align-self: stretch; /* full column width despite the centered flex column */
-  position: relative; /* anchor for the face inset and the Rec badge */
   aspect-ratio: 16 / 9;
   background: var(--bg-elev);
   border: 1px solid var(--border);
@@ -80,45 +79,6 @@
   object-fit: cover;
   transform: scaleX(-1);
   display: block;
-}
-
-/* Recording badge, top-left of the preview, with a slow pulsing dot. */
-.session-rec {
-  position: absolute;
-  top: 10px;
-  left: 10px;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 3px 9px 3px 7px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  color: #f0ebe0;
-  font-size: 10px;
-  font-weight: 600;
-  letter-spacing: 0.12em;
-  text-transform: uppercase;
-}
-
-.session-rec::before {
-  content: '';
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #e0574a;
-  animation: session-pulse 1.6s ease-in-out infinite;
-}
-
-@keyframes session-pulse {
-  50% {
-    opacity: 0.3;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .session-rec::before {
-    animation: none;
-  }
 }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */

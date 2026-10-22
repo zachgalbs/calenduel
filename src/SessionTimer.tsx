@@ -105,7 +105,6 @@ export default function SessionTimer({
             playsInline
             muted
           />
-          {status === 'running' && <span className="session-rec">Rec</span>}
         </div>
       )}
 
