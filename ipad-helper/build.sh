@@ -11,7 +11,7 @@ mkdir -p "$APP/Contents/MacOS"
 cp Info.plist "$APP/Contents/Info.plist"
 FLAGS=""
 [ "${1:-}" = "--dev" ] && FLAGS="-D DEV"
-swiftc -O -swift-version 5 $FLAGS CalenduelIPad.swift -o "$APP/Contents/MacOS/CalenduelIPad"
+swiftc -O -swift-version 5 -parse-as-library $FLAGS CalenduelIPad.swift Shared/Link.swift -o "$APP/Contents/MacOS/CalenduelIPad"
 codesign --force --sign - "$APP"
 echo "built $APP"
 if [ "${1:-}" = "--install" ]; then
