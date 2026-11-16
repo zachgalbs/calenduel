@@ -9,6 +9,7 @@ import './Account.css'
 // waits on the auth and database SDK.
 const ProfileSection = lazy(() => import('./ProfileSection'))
 const FeedbackSection = lazy(() => import('./FeedbackSection'))
+const IpadSection = lazy(() => import('./IpadSection'))
 
 function days(n: number): string {
   return `${n} day${n === 1 ? '' : 's'}`
@@ -105,6 +106,10 @@ export default function Account() {
         <h2>Subjects</h2>
         <SubjectTally />
       </section>
+
+      <Suspense fallback={null}>
+        <IpadSection />
+      </Suspense>
 
       <Suspense fallback={null}>
         <FeedbackSection />

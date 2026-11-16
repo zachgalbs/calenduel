@@ -205,3 +205,25 @@
 .feedback-sent {
   margin-top: 0;
 }
+
+.ipad-pair {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 16px 24px;
+}
+
+/* Always dark on white: phones and iPads read that most reliably. */
+.ipad-qr {
+  padding: 12px;
+  background: #fff;
+  border-radius: 8px;
+  line-height: 0;
+}
+
+.ipad-steps {
+  margin: 0;
+  padding-left: 20px;
+  max-width: 320px;
+  line-height: 1.5;
+}

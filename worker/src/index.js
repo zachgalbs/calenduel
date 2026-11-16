@@ -1,5 +1,6 @@
 import { createRemoteJWKSet, jwtVerify } from 'jose'
 import { SUBJECT_RUBRIC, sortSubjects, validSubjectsInput } from './subjects.js'
+import { handleIpad } from './ipad.js'
 
 export const RUBRIC_VERSION = 'task-v2'
 // Laptop and iPad scored together (a second image). Laptop-only stays task-v2.
@@ -129,6 +130,22 @@ export function validCompareInput(body) {
   return body && validTask(body.task) && validImage(body.anchor) && validImage(body.image)
 }
 
+// The signed-in user's subject, or null for a missing, invalid, expired or
+// anonymous token.
+async function authenticate(env, token) {
+  if (!token) return null
+  try {
+    if (!keys.has(env.JWKS_URL)) keys.set(env.JWKS_URL, createRemoteJWKSet(new URL(env.JWKS_URL)))
+    const { payload } = await jwtVerify(token, keys.get(env.JWKS_URL), {
+      issuer: env.AUTH_ISSUER, audience: env.AUTH_ISSUER, algorithms: ['EdDSA'],
+    })
+    if (!payload.sub || payload.anonymous === true || payload.isAnonymous === true) return null
+    return payload.sub
+  } catch {
+    return null
+  }
+}
+
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin')
@@ -147,6 +164,14 @@ export default {
       return reply({ ok: true, model: 'clef-flash', rubric: RUBRIC_VERSION, ipadRubric: RUBRIC_IPAD,
         anchorRubric: RUBRIC_ANCHOR, subjects: SUBJECT_RUBRIC })
     }
+    const path = new URL(request.url).pathname
+    if (path.startsWith('/ipad/')) {
+      return handleIpad(request, env, {
+        path, origin, allowed, headers,
+        authenticate: token => authenticate(env, token),
+        limit: async key => (await env.LIMITER.limit({ key })).success,
+      })
+    }
     if (!allowed) return reply({ error: 'Origin not allowed' }, 403)
     if (request.method === 'OPTIONS') return new Response(null, { status: 204, headers })
     const route = ROUTES[new URL(request.url).pathname]
@@ -154,17 +179,8 @@ export default {
     // Authenticate before accepting images or spending inference capacity.
     const token = request.headers.get('Authorization')?.match(/^Bearer (\S+)$/)?.[1]
     if (!token) return reply({ error: route.messages.signIn }, 401)
-    let subject
-    try {
-      if (!keys.has(env.JWKS_URL)) keys.set(env.JWKS_URL, createRemoteJWKSet(new URL(env.JWKS_URL)))
-      const { payload } = await jwtVerify(token, keys.get(env.JWKS_URL), {
-        issuer: env.AUTH_ISSUER, audience: env.AUTH_ISSUER, algorithms: ['EdDSA'],
-      })
-      if (!payload.sub || payload.anonymous === true || payload.isAnonymous === true) throw new Error('No user')
-      subject = payload.sub
-    } catch {
-      return reply({ error: route.messages.signInAgain }, 401)
-    }
+    const subject = await authenticate(env, token)
+    if (!subject) return reply({ error: route.messages.signInAgain }, 401)
     // Separate budgets, so sorting sessions never eats into focus analysis.
     if (!(await env.LIMITER.limit({ key: `${route.limitKey}:${subject}` })).success) {
       return reply({ error: route.messages.tooMany }, 429)

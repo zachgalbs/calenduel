@@ -1,10 +1,12 @@
 {
   "name": "calenduel-focus",
-  "main": "src/index.js",
+  "main": "src/worker.js",
   "compatibility_date": "2026-11-09",
   "workers_dev": true,
   "observability": { "enabled": false },
   "ai": { "binding": "AI" },
+  "durable_objects": { "bindings": [{ "name": "IPAD_RELAY", "class_name": "IpadRelay" }] },
+  "migrations": [{ "tag": "ipad-relay-v1", "new_sqlite_classes": ["IpadRelay"] }],
   "ratelimits": [{
     "name": "LIMITER",
     "namespace_id": "912001",

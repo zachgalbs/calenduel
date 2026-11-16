@@ -6,6 +6,7 @@ import {
   openHelperFeed,
   type HelperFeed,
 } from '../media/ipadHelper'
+import { watchRelay, type RelayWatch } from '../media/ipadRelay'
 import {
   startTimelapse,
   type TimelapseRecorder,
@@ -34,8 +35,8 @@ export interface RecorderHandle {
   // Acquire screen + camera and start recording. Rejects if either is denied,
   // which the caller uses to block the session from starting.
   begin: () => Promise<void>
-  // Add the iPad mid-session. Uses the iPad helper when it has one plugged in,
-  // otherwise a second shared window (e.g. QuickTime mirroring an iPad). Call
+  // Add the iPad mid-session. Uses the iPad on its own when it's there (the USB
+  // helper or the wireless Calenduel Link app), otherwise a second shared window (e.g. QuickTime mirroring an iPad). Call
   // straight from a click. Cancelling the picker is a no-op, not an error.
   addIpad: () => Promise<void>
   // Take the iPad out of the frame for the rest of this session.
@@ -78,6 +79,9 @@ function unmountHiddenVideo(video: HTMLVideoElement): void {
   video.remove()
 }
 
+// Opens the iPad as a live feed: the USB helper's or the wireless app's.
+type IpadSource = (onLost: () => void) => HelperFeed
+
 // onInterrupted fires when the user ends the screen share from the browser's own
 // "Stop sharing" UI mid-session — the caller should treat it like pressing Stop.
 export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle {
@@ -95,14 +99,15 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
   const liveRef = useRef(false)
   // The current iPad stream, readable from timers and async callbacks.
   const ipadRef = useRef<MediaStream | null>(null)
-  // The helper feed behind `ipad`, when the iPad came from the helper.
+  // The feed behind `ipad`, when the iPad came from the helper or the app.
   const helperFeedRef = useRef<HelperFeed | null>(null)
-  // Set by Remove: the helper won't re-add the iPad until Add is clicked.
+  // Set by Remove: the iPad isn't re-added on its own until Add is clicked.
   const dismissedRef = useRef(false)
-  // The helper reported an iPad on its last check (lets Add skip the picker).
+  // The last check found an iPad (lets Add skip the picker).
   const helperSeesIpadRef = useRef(false)
-  // Runs one helper check now; set while a session is live.
+  // While a session is live: run one check now, and find an iPad source.
   const checkHelperRef = useRef<(() => Promise<void>) | null>(null)
+  const findIpadRef = useRef<(() => Promise<IpadSource | null>) | null>(null)
   useEffect(() => {
     ipadRef.current = ipad
   }, [ipad])
@@ -167,21 +172,28 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     }
   }, [ipad])
 
-  // The iPad helper, while a session is live: checked at the start and every few
-  // seconds after, so plugging the iPad in mid-session also works. Only runs in
-  // browsers that opted in (see media/ipadHelper.ts).
+  // The iPad on its own, while a session is live: the USB helper (in browsers
+  // that opted in, see media/ipadHelper.ts) or the wireless app (signed in, see
+  // media/ipadRelay.ts). Checked at the start and every few seconds after, and
+  // right away when the wireless iPad starts broadcasting.
   useEffect(() => {
-    if (!streams || !helperEnabled()) return
+    if (!streams) return
     dismissedRef.current = false
     let cancelled = false
     let pending: HelperFeed | null = null
+    let relay: RelayWatch | null = null
+    const find = async (): Promise<IpadSource | null> => {
+      if (helperEnabled() && (await helperHasIpad())) return openHelperFeed
+      return relay?.hasIpad() ? relay.openFeed : null
+    }
     const check = async () => {
       if (cancelled || pending || ipadRef.current || dismissedRef.current) return
-      const present = await helperHasIpad()
-      helperSeesIpadRef.current = present
-      if (!present || cancelled || pending || ipadRef.current || dismissedRef.current) return
-      const feed = openHelperFeed(() => {
-        // Unplugged or the helper quit: drop it from the frame, keep the session.
+      const open = await find()
+      helperSeesIpadRef.current = open !== null
+      if (!open || cancelled || pending || ipadRef.current || dismissedRef.current) return
+      const feed = open(() => {
+        // Unplugged, stopped broadcasting or the helper quit: drop it from the
+        // frame, keep the session.
         if (helperFeedRef.current === feed) setIpad(null)
       })
       pending = feed
@@ -196,13 +208,20 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
       setIpad(feed.stream)
     }
     checkHelperRef.current = check
+    findIpadRef.current = find
+    void watchRelay(() => void check()).then((watch) => {
+      if (cancelled) watch?.close()
+      else relay = watch
+    })
     void check()
     const timer = setInterval(() => void check(), 4000)
     return () => {
       cancelled = true
       clearInterval(timer)
       pending?.stop()
+      relay?.close()
       checkHelperRef.current = null
+      findIpadRef.current = null
       helperSeesIpadRef.current = false
     }
   }, [streams])
@@ -213,12 +232,12 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
   }, [])
 
   const addIpad = useCallback(async () => {
-    // The helper has the iPad: no picker needed. Re-ask the helper first (a
-    // quick local call): its last answer may predate an unplug. If it has
-    // nothing, fall through to the picker while the click still counts.
-    if (helperSeesIpadRef.current && checkHelperRef.current) {
+    // The iPad is there on its own: no picker needed. Re-ask first (quick): the
+    // last answer may predate an unplug. If it's gone, fall through to the
+    // picker while the click still counts.
+    if (helperSeesIpadRef.current && checkHelperRef.current && findIpadRef.current) {
       const check = checkHelperRef.current
-      if (await helperHasIpad()) {
+      if (await findIpadRef.current()) {
         dismissedRef.current = false
         await check()
         return

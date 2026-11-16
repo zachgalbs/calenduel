@@ -10,8 +10,6 @@
   <key>CFBundleVersion</key><string>1</string>
   <key>LSMinimumSystemVersion</key><string>13.0</string>
   <key>LSUIElement</key><true/>
-  <key>NSLocalNetworkUsageDescription</key><string>Calenduel iPad receives your iPad's screen over Wi-Fi from the Calenduel Link app.</string>
-  <key>NSBonjourServices</key><array><string>_calenduel-ipad._tcp</string></array>
   <key>NSCameraUsageDescription</key><string>Calenduel iPad reads your iPad's screen over USB so Calenduel can add it to your session timelapse.</string>
 </dict>
 </plist>
