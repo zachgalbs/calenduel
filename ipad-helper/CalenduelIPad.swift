@@ -1,17 +1,11 @@
-// Calenduel iPad: a menu-bar helper that gets the iPad's screen two ways and
-// hands the latest frame to the Calenduel page over http://127.0.0.1:
-// - USB: reads a plugged-in iPad the same way QuickTime's "New Movie Recording →
-//   iPad" does.
-// - Wi-Fi: receives frames from the Calenduel Link iPad app's screen broadcast
-//   (ios/), paired with the code in this app's menu. See Shared/Link.swift.
-// No QuickTime window and no screen-share picker: the page fetches frames while a
-// session is running.
+// Calenduel iPad: a menu-bar helper that reads a USB-connected iPad's screen the
+// same way QuickTime's "New Movie Recording → iPad" does, and hands the latest
+// frame to the Calenduel page over http://127.0.0.1. No QuickTime window and no
+// screen-share picker: the page fetches frames while a session is running.
 //
-// Privacy: the page server listens on the loopback interface only and answers only
-// the Origins below. The Wi-Fi listener only accepts an iPad holding the pairing
-// code, over TLS. Frames are captured (USB) or encoded on the iPad (Wi-Fi) only
-// while a page is asking for them, and nothing is kept on disk. The menu-bar icon
-// turns red while frames are flowing.
+// Privacy: it listens on the loopback interface only, answers only the Origins
+// below, captures only while a page is actually asking for frames, and keeps
+// nothing on disk. The menu-bar icon turns red while it is capturing.
 //
 // Build and install: ./build.sh --install (see README.md).
 import AppKit
@@ -38,7 +32,7 @@ let SITE = URL(string: "https://calenduel.com/?ipadHelper=1")!
 // MARK: - Capture
 
 final class IPadCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate {
-  struct Frame { let jpeg: Data; let at: Date }
+  struct Frame { let jpeg: Data; let width: Int; let height: Int; let at: Date }
 
   // Guards latest, lastRequest and the two published flags.
   private let lock = NSLock()
@@ -168,7 +162,8 @@ final class IPadCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate 
           let jpeg = ci.jpegRepresentation(of: image, colorSpace: space,
             options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.75])
     else { return }
-    let frame = Frame(jpeg: jpeg, at: Date())
+    let frame = Frame(jpeg: jpeg, width: Int(image.extent.width.rounded()),
+                      height: Int(image.extent.height.rounded()), at: Date())
     lock.lock(); latest = frame; lock.unlock()
   }
 
@@ -180,185 +175,14 @@ final class IPadCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate 
   var capturing: Bool { lock.lock(); defer { lock.unlock() }; return isCapturing }
 }
 
-// MARK: - Wi-Fi link
-
-// Receives frames from the iPad app's broadcast extension. One iPad at a time:
-// a newly connected one replaces the old. Tells the iPad whether anyone wants
-// frames, so it only encodes during a session.
-final class WirelessLink {
-  private let queue = DispatchQueue(label: "calenduel.ipad.wifi")
-
-  // Guards the fields below it.
-  private let lock = NSLock()
-  private var latest: IPadCapture.Frame?
-  private var isConnected = false
-  private var isWanting = false
-  private var lastRequest = Date.distantPast
-
-  // Touched on `queue` only.
-  private var listener: NWListener?
-  private var conn: NWConnection?
-
-  // Main thread only.
-  private(set) var code: String
-
-  var onChange: (() -> Void)?
-
-  init() {
-    if let saved = UserDefaults.standard.string(forKey: "pairCode"), let code = Link.normalize(saved) {
-      self.code = code
-    } else {
-      code = Link.newCode()
-      UserDefaults.standard.set(code, forKey: "pairCode")
-    }
-  }
-
-  func start() {
-    let code = self.code
-    queue.async { self.listen(code: code) }
-  }
-
-  // A new code unpairs every iPad: the old one can no longer connect.
-  func resetCode() {
-    code = Link.newCode()
-    UserDefaults.standard.set(code, forKey: "pairCode")
-    let code = self.code
-    queue.async {
-      self.listener?.cancel()
-      self.listener = nil
-      self.conn?.cancel()
-      self.listen(code: code)
-    }
-  }
-
-  private func listen(code: String) {
-    let listener: NWListener
-    do { listener = try NWListener(using: Link.parameters(code: code)) } catch {
-      NSLog("Calenduel iPad: cannot start the Wi-Fi listener: \(error)")
-      return
-    }
-    listener.service = NWListener.Service(type: Link.serviceType) // named after this Mac
-    listener.newConnectionHandler = { [weak self] conn in self?.accept(conn) }
-    listener.stateUpdateHandler = { [weak self, weak listener] state in
-      guard let self, let listener, case .failed(let error) = state else { return }
-      NSLog("Calenduel iPad: Wi-Fi listener failed: \(error); retrying")
-      listener.cancel()
-      self.queue.asyncAfter(deadline: .now() + 5) {
-        if self.listener === listener { self.listen(code: code) }
-      }
-    }
-    listener.start(queue: queue)
-    self.listener = listener
-  }
-
-  private func accept(_ new: NWConnection) {
-    new.stateUpdateHandler = { [weak self] state in
-      guard let self else { return }
-      switch state {
-      case .ready:
-        // Handshake done, so it holds the code. Only now replace the old one: a
-        // stranger without the code can't knock a working iPad off.
-        let old = self.conn
-        self.conn = new
-        old?.cancel()
-        self.lock.lock(); self.isConnected = true; self.latest = nil; self.lock.unlock()
-        self.onChange?()
-        self.sendWantState()
-        self.readFrames(new)
-      case .failed, .waiting:
-        new.cancel() // also how a wrong code ends: close it so the iPad hears at once
-      case .cancelled:
-        self.lost(new)
-      default:
-        break
-      }
-    }
-    new.start(queue: queue)
-    // A wrong code fails the handshake at once; anything still not ready is dropped.
-    queue.asyncAfter(deadline: .now() + 10) { [weak new] in
-      if let new, new.state != .ready { new.cancel() }
-    }
-  }
-
-  private func lost(_ old: NWConnection) {
-    guard conn === old else { return }
-    conn = nil
-    lock.lock(); isConnected = false; latest = nil; lock.unlock()
-    onChange?()
-  }
-
-  private func readFrames(_ c: NWConnection) {
-    Link.readMessage(c) { [weak self] message in
-      guard let self, self.conn === c else { return }
-      guard let jpeg = message else { return c.cancel() }
-      self.lock.lock()
-      // Frames still in flight after IDLE are dropped: nobody asked for them.
-      if self.isWanting { self.latest = IPadCapture.Frame(jpeg: jpeg, at: Date()) }
-      self.lock.unlock()
-      self.readFrames(c)
-    }
-  }
-
-  // Runs on `queue`.
-  private func sendWantState() {
-    lock.lock(); let wanting = isWanting; lock.unlock()
-    conn?.send(content: Data([wanting ? Link.want : Link.idle]), completion: .idempotent)
-  }
-
-  // Called by the server for every frame request.
-  func want() {
-    lock.lock()
-    lastRequest = Date()
-    let changed = !isWanting
-    isWanting = true
-    lock.unlock()
-    if changed {
-      queue.async { self.sendWantState() }
-      onChange?()
-    }
-  }
-
-  // Runs every couple of seconds: tell the iPad to stop once no page has asked
-  // for a while, and forget the last frame so a later session never sees it.
-  func tick() {
-    lock.lock()
-    let stop = isWanting && Date().timeIntervalSince(lastRequest) > IDLE_STOP
-    if stop { isWanting = false; latest = nil }
-    lock.unlock()
-    if stop {
-      queue.async { self.sendWantState() }
-      onChange?()
-    }
-  }
-
-  var frame: IPadCapture.Frame? { lock.lock(); defer { lock.unlock() }; return latest }
-  var connected: Bool { lock.lock(); defer { lock.unlock() }; return isConnected }
-  var sending: Bool { lock.lock(); defer { lock.unlock() }; return isConnected && isWanting }
-}
-
 // MARK: - Loopback HTTP server
 
 final class Server {
   private let capture: IPadCapture
-  private let wireless: WirelessLink
   private var listener: NWListener?
   private let queue = DispatchQueue(label: "calenduel.ipad.server")
 
-  init(capture: IPadCapture, wireless: WirelessLink) {
-    self.capture = capture
-    self.wireless = wireless
-  }
-
-  // Whichever source sent the newest picture: an iPad on both USB and Wi-Fi
-  // shows the same screen anyway.
-  private var newestFrame: IPadCapture.Frame? {
-    switch (capture.frame, wireless.frame) {
-    case let (usb?, wifi?): return usb.at > wifi.at ? usb : wifi
-    case let (usb, wifi): return usb ?? wifi
-    }
-  }
-
-  private var connected: Bool { capture.connected || wireless.connected }
+  init(capture: IPadCapture) { self.capture = capture }
 
   func start() throws {
     let params = NWParameters.tcp
@@ -429,22 +253,20 @@ final class Server {
     case ("GET", "/status"):
       let body: [String: Any] = [
         "app": "calenduel-ipad", "version": 1,
-        "connected": connected, "capturing": capture.capturing || wireless.sending,
-        "usb": capture.connected, "wifi": wireless.connected,
+        "connected": capture.connected, "capturing": capture.capturing,
       ]
       cors["Content-Type"] = "application/json"
       send(conn, status: "200 OK", headers: cors,
            body: (try? JSONSerialization.data(withJSONObject: body)) ?? Data())
     case ("GET", "/frame"):
       capture.want()
-      wireless.want()
-      if let frame = newestFrame {
+      if let frame = capture.frame {
         cors["Content-Type"] = "image/jpeg"
         send(conn, status: "200 OK", headers: cors, body: frame.jpeg)
       } else {
         // 204: connected but no picture yet (a still iPad sends nothing until
         // its screen changes). 404: no iPad at all.
-        send(conn, status: connected ? "204 No Content" : "404 Not Found", headers: cors, body: Data())
+        send(conn, status: capture.connected ? "204 No Content" : "404 Not Found", headers: cors, body: Data())
       }
     default:
       send(conn, status: "404 Not Found", headers: cors, body: Data())
@@ -464,11 +286,9 @@ final class Server {
 
 final class App: NSObject, NSApplicationDelegate {
   let capture = IPadCapture()
-  let wireless = WirelessLink()
-  lazy var server = Server(capture: capture, wireless: wireless)
+  lazy var server = Server(capture: capture)
   var item: NSStatusItem!
   let statusLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
-  let codeLine = NSMenuItem(title: "", action: nil, keyEquivalent: "")
   let loginItem = NSMenuItem(title: "Open at Login", action: #selector(toggleLogin), keyEquivalent: "")
 
   func applicationDidFinishLaunching(_ note: Notification) {
@@ -476,15 +296,6 @@ final class App: NSObject, NSApplicationDelegate {
     let menu = NSMenu()
     statusLine.isEnabled = false
     menu.addItem(statusLine)
-    menu.addItem(.separator())
-    codeLine.isEnabled = false
-    menu.addItem(codeLine)
-    let copyCode = NSMenuItem(title: "Copy Pairing Code", action: #selector(copyCode), keyEquivalent: "")
-    copyCode.target = self
-    menu.addItem(copyCode)
-    let newCode = NSMenuItem(title: "New Pairing Code…", action: #selector(resetCode), keyEquivalent: "")
-    newCode.target = self
-    menu.addItem(newCode)
     menu.addItem(.separator())
     menu.addItem(NSMenuItem(title: "Open Calenduel", action: #selector(openSite), keyEquivalent: ""))
     loginItem.target = self
@@ -494,12 +305,9 @@ final class App: NSObject, NSApplicationDelegate {
     item.menu = menu
 
     capture.onChange = { [weak self] in DispatchQueue.main.async { self?.render() } }
-    wireless.onChange = { [weak self] in DispatchQueue.main.async { self?.render() } }
     do { try server.start() } catch { NSLog("Calenduel iPad: \(error)"); NSApp.terminate(nil) }
-    wireless.start()
     Timer.scheduledTimer(withTimeInterval: 2, repeats: true) { [weak self] _ in
       self?.capture.tick()
-      self?.wireless.tick()
       self?.render()
     }
 
@@ -514,41 +322,20 @@ final class App: NSObject, NSApplicationDelegate {
   }
 
   func render() {
-    let usb = capture.connected
-    let wifi = wireless.connected
-    let connected = usb || wifi
-    let capturing = capture.capturing || wireless.sending
+    let connected = capture.connected
+    let capturing = capture.capturing
     let image = NSImage(systemSymbolName: "ipad", accessibilityDescription: "Calenduel iPad")
     image?.isTemplate = !capturing
     item.button?.image = image
     item.button?.contentTintColor = capturing ? .systemRed : nil
     item.button?.appearsDisabled = !connected
-    let via = usb && wifi ? "USB and Wi-Fi" : usb ? "USB" : "Wi-Fi"
-    statusLine.title = capturing ? "Sending iPad screen to Calenduel (\(via))"
-      : connected ? "iPad connected over \(via) · waiting for a session"
-      : "No iPad · broadcast from Calenduel Link, or plug in by USB"
-    codeLine.title = "Wi-Fi pairing code: \(wireless.code)"
+    statusLine.title = capturing ? "Sending iPad screen to Calenduel"
+      : connected ? "iPad connected · waiting for a session"
+      : "No iPad · connect it by USB and tap Trust"
     loginItem.state = SMAppService.mainApp.status == .enabled ? .on : .off
   }
 
   @objc func openSite() { NSWorkspace.shared.open(SITE) }
-
-  @objc func copyCode() {
-    NSPasteboard.general.clearContents()
-    NSPasteboard.general.setString(wireless.code, forType: .string)
-  }
-
-  @objc func resetCode() {
-    let alert = NSAlert()
-    alert.messageText = "Make a new pairing code?"
-    alert.informativeText = "The paired iPad disconnects and has to be paired again with the new code in the Calenduel Link app."
-    alert.addButton(withTitle: "New Code")
-    alert.addButton(withTitle: "Cancel")
-    NSApp.activate(ignoringOtherApps: true)
-    guard alert.runModal() == .alertFirstButtonReturn else { return }
-    wireless.resetCode()
-    render()
-  }
 
   @objc func toggleLogin() {
     if SMAppService.mainApp.status == .enabled { try? SMAppService.mainApp.unregister() }
@@ -557,13 +344,8 @@ final class App: NSObject, NSApplicationDelegate {
   }
 }
 
-@main
-enum Main {
-  static let delegate = App()
-  static func main() {
-    let app = NSApplication.shared
-    app.delegate = delegate
-    app.setActivationPolicy(.accessory)
-    app.run()
-  }
-}
+let app = NSApplication.shared
+let delegate = App()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()

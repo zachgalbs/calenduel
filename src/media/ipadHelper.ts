@@ -1,6 +1,6 @@
 // Talks to the Calenduel iPad helper (ipad-helper/): a small Mac menu-bar app
-// that gets the iPad's screen (over USB the way QuickTime does, or over Wi-Fi from
-// the Calenduel Link iPad app) and serves the newest frame on 127.0.0.1. With it, a session picks the iPad up on its own:
+// that reads a USB-connected iPad's screen the way QuickTime does and serves the
+// newest frame on 127.0.0.1. With it, a session picks the iPad up on its own:
 // no QuickTime window, no second screen-share picker.
 //
 // Opt-in per browser. The helper's first launch opens calenduel.com/?ipadHelper=1,
