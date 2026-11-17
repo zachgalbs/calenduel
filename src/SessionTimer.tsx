@@ -12,7 +12,7 @@ import {
   writeActive,
   type ActiveSession,
 } from './session/activeSession'
-import { startPresence } from './group/presence'
+import RoomPanel from './room/RoomPanel'
 import { sortSessions } from './subjects/sort'
 
 // File a just-saved session under a subject, in the background.
@@ -35,9 +35,19 @@ function describe(e: unknown): string {
 }
 
 export default function SessionTimer({
+  room = null,
+  autoStart = false,
+  onAutoStarted,
+  onLeaveRoom,
   onActiveChange,
   onSessionSaved,
 }: {
+  // The group study this session belongs to, shown beside the timer.
+  room?: string | null
+  // Start straight away: the lobby's Start studying click brought us here.
+  autoStart?: boolean
+  onAutoStarted?: () => void
+  onLeaveRoom?: () => void
   onActiveChange: (active: boolean) => void
   onSessionSaved?: () => void
 }) {
@@ -91,11 +101,18 @@ export default function SessionTimer({
     }
   }, [status, startedAt, task])
 
-  // Shows you as studying now in your study groups (the Group tab).
+
+  // Arriving from a group study's Start studying: start once, on that click's
+  // gesture (a browser counts a click as one for a few seconds). If it has
+  // lapsed, the picker refuses and the Start button is right here.
+  const autoStartedRef = useRef(false)
   useEffect(() => {
-    if (status !== 'running' || startedAt === null) return
-    return startPresence(startedAt)
-  }, [status, startedAt])
+    if (!autoStart || autoStartedRef.current || status !== 'idle') return
+    autoStartedRef.current = true
+    onAutoStarted?.()
+    void handleStart()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once, on arrival
+  }, [autoStart])
 
   // Ask before a refresh or close throws away a session in progress.
   useEffect(() => {
@@ -346,6 +363,14 @@ export default function SessionTimer({
 
       {notice && <p className="session-notice" role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
+
+      {room && (
+        <RoomPanel
+          code={room}
+          studyingSince={status === 'running' ? startedAt : null}
+          onLeave={() => onLeaveRoom?.()}
+        />
+      )}
     </section>
   )
 }

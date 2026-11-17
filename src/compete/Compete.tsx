@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   addFriend,
+  createRoom,
   ensureProfile,
   fetchDailyTotals,
   fetchFriendSessions,
@@ -341,7 +342,65 @@ function InviteForm({
   )
 }
 
-export default function Compete() {
+// Top of Compete: study together, live. Starting makes a group study and opens
+// its lobby, where the link is waiting to be shared.
+function GroupStudy({
+  room,
+  onOpenRoom,
+}: {
+  room: string | null
+  onOpenRoom: (code: string) => void
+}) {
+  const [creating, setCreating] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  async function handleStart() {
+    setError(null)
+    setCreating(true)
+    try {
+      onOpenRoom(await createRoom())
+    } catch (err) {
+      setError(errorText(err))
+      setCreating(false)
+    }
+  }
+
+  return (
+    <section className="group-study">
+      <div className="group-study-text">
+        <h2>Group study</h2>
+        <p className="compete-note">
+          {room
+            ? 'You’re in a group study.'
+            : 'Study together in real time. Share a link, and see who’s studying and for how long.'}
+        </p>
+      </div>
+      {room ? (
+        <button type="button" className="compete-btn primary" onClick={() => onOpenRoom(room)}>
+          Back to group study
+        </button>
+      ) : (
+        <button
+          type="button"
+          className="compete-btn primary"
+          onClick={handleStart}
+          disabled={creating}
+        >
+          {creating ? 'Starting...' : 'Start group study'}
+        </button>
+      )}
+      {error && <p className="compete-error" role="alert">{error}</p>}
+    </section>
+  )
+}
+
+export default function Compete({
+  room = null,
+  onOpenRoom = () => {},
+}: {
+  room?: string | null
+  onOpenRoom?: (code: string) => void
+}) {
   // null = still finding out.
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [board, setBoard] = useState<Board | null>(null)
@@ -449,6 +508,8 @@ export default function Compete() {
 
       {board && (
         <>
+          <GroupStudy room={room} onOpenRoom={onOpenRoom} />
+
           {board.failedUploads > 0 && (
             <p className="compete-error" role="alert">
               {plural(board.failedUploads, 'session')} couldn't be uploaded and

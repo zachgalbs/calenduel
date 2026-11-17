@@ -56,7 +56,7 @@ export async function focusToken(): Promise<string | null> {
 // Leaves the page for Google, then returns to the tab it left from (Compete
 // unless told otherwise). Anything already in the URL, like an invite code,
 // survives the round trip.
-export async function signIn(tab: 'compete' | 'group' = 'compete'): Promise<void> {
+export async function signIn(tab: 'compete' | 'room' = 'compete'): Promise<void> {
   const params = new URLSearchParams(window.location.search)
   params.set('tab', tab)
   const { error } = await neon.auth.signIn.social({
@@ -128,113 +128,100 @@ export async function addFriend(code: string): Promise<string> {
   return data as string
 }
 
-// Study groups (db/migrations/008): one link that connects a whole group.
-export interface GroupPreview {
-  ownerName: string
+// Group study (db/migrations/010): a session studied together, live.
+export interface RoomPreview {
+  hostName: string
   members: number
+  started: boolean
   joined: boolean
-}
-
-// The caller's own group link code, made on first use.
-export async function myGroupCode(): Promise<string> {
-  const { data, error } = await neon.rpc('my_group_code')
-  if (error) fail(error)
-  return data as string
-}
-
-// Whose group a link is for, or null if the link doesn't match one.
-export async function groupPreview(code: string): Promise<GroupPreview | null> {
-  const { data, error } = await neon.rpc('group_preview', { group_code: code })
-  if (error) fail(error)
-  const row = (data as { owner_name: string; members: number; joined: boolean }[])[0]
-  return row ? { ownerName: row.owner_name, members: row.members, joined: row.joined } : null
-}
-
-// Joins and connects with everyone in the group. Returns how many new friends.
-export async function joinGroup(code: string): Promise<number> {
-  const { data, error } = await neon.rpc('join_group', { group_code: code })
-  if (error) fail(error)
-  return data as number
-}
-
-// Group rooms (db/migrations/009).
-export interface StudyGroup {
-  id: string
-  name: string
-  ownerName: string
-  code: string
-  isOwner: boolean
-  members: number
+  expired: boolean
 }
 
 export interface RoomMember {
   id: string
   name: string
   avatar: string | null
-  todayMs: number // finished sessions today
-  studyingSince: number | null // live session start, if studying now
+  isHost: boolean
+  here: boolean // has the lobby or a session open
+  liveSince: number | null // start of a session running now
+  bankedMs: number // time already studied in this group study
 }
 
-export async function myGroups(): Promise<StudyGroup[]> {
-  const { data, error } = await neon.rpc('my_groups')
+export interface RoomState {
+  hostName: string
+  startedAt: number | null
+  members: RoomMember[]
+}
+
+export async function createRoom(): Promise<string> {
+  const { data, error } = await neon.rpc('create_room')
   if (error) fail(error)
-  return (
-    data as {
-      group_id: string
-      name: string
-      owner_name: string
-      code: string
-      is_owner: boolean
-      members: number
-    }[]
-  ).map((g) => ({
-    id: g.group_id,
-    name: g.name,
-    ownerName: g.owner_name,
-    code: g.code,
-    isOwner: g.is_owner,
-    members: g.members,
-  }))
+  return data as string
 }
 
-export async function groupRoom(groupId: string, today: string): Promise<RoomMember[]> {
-  const { data, error } = await neon.rpc('group_room', { target: groupId, today })
+export async function roomPreview(code: string): Promise<RoomPreview | null> {
+  const { data, error } = await neon.rpc('room_preview', { room_code: code })
   if (error) fail(error)
-  return (
-    data as {
-      user_id: string
-      display_name: string
-      avatar: string | null
-      today_ms: number | string
-      studying_since: string | null
-    }[]
-  ).map((m) => ({
-    id: m.user_id,
-    name: m.display_name,
-    avatar: m.avatar,
-    todayMs: Number(m.today_ms),
-    studyingSince: m.studying_since ? Date.parse(m.studying_since) : null,
-  }))
+  const row = (
+    data as { host_name: string; members: number; started: boolean; joined: boolean; expired: boolean }[]
+  )[0]
+  return row
+    ? { hostName: row.host_name, members: row.members, started: row.started, joined: row.joined, expired: row.expired }
+    : null
 }
 
-export async function renameGroup(groupId: string, name: string): Promise<void> {
-  const { error } = await neon.rpc('rename_group', { target: groupId, new_name: name })
+// Joins, and connects with everyone in the room. Returns how many new friends.
+export async function joinRoom(code: string): Promise<number> {
+  const { data, error } = await neon.rpc('join_room', { room_code: code })
+  if (error) fail(error)
+  return data as number
+}
+
+export async function roomState(code: string): Promise<RoomState> {
+  const { data, error } = await neon.rpc('room_state', { room_code: code })
+  if (error) fail(error)
+  const rows = data as {
+    user_id: string
+    display_name: string
+    avatar: string | null
+    is_host: boolean
+    here: boolean
+    live_since: string | null
+    banked_ms: number | string
+    host_name: string
+    started_at: string | null
+  }[]
+  return {
+    hostName: rows[0]?.host_name ?? '',
+    startedAt: rows[0]?.started_at ? Date.parse(rows[0].started_at) : null,
+    members: rows.map((r) => ({
+      id: r.user_id,
+      name: r.display_name,
+      avatar: r.avatar,
+      isHost: r.is_host,
+      here: r.here,
+      liveSince: r.live_since ? Date.parse(r.live_since) : null,
+      bankedMs: Number(r.banked_ms),
+    })),
+  }
+}
+
+export async function startRoom(code: string): Promise<void> {
+  const { error } = await neon.rpc('start_room', { room_code: code })
   if (error) fail(error)
 }
 
-export async function leaveGroup(groupId: string): Promise<void> {
-  const { error } = await neon.rpc('leave_group', { target: groupId })
+// "I'm here", with the start of my running session, or null between sessions.
+export async function roomBeat(code: string, studyingSince: number | null): Promise<void> {
+  const { error } = await neon.rpc('room_beat', {
+    room_code: code,
+    studying: studyingSince === null ? null : new Date(studyingSince).toISOString(),
+  })
   if (error) fail(error)
 }
 
-// Live presence: "studying now, since startedAt", for the people in your groups.
-export async function heartbeat(startedAt: number): Promise<void> {
-  const { error } = await neon.rpc('heartbeat', { started: new Date(startedAt).toISOString() })
-  if (error) fail(error)
-}
-
-export async function endLive(): Promise<void> {
-  const { error } = await neon.rpc('end_live')
+export async function leaveRoom(code: string): Promise<void> {
+  const { error } = await neon.rpc('leave_room', { room_code: code })
   if (error) fail(error)
 }
 

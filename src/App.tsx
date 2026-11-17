@@ -2,14 +2,15 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import SessionTimer from './SessionTimer'
 import History from './History'
 import Account from './account/Account'
+import { roomFromUrl, saveRoom, savedRoom } from './room/useRoom'
 import './App.css'
 
 // The auth and database SDK is big and only competition features use it, so
 // it loads on demand rather than slowing down the timer.
 const Compete = lazy(() => import('./compete/Compete'))
-const Group = lazy(() => import('./group/Group'))
+const Lobby = lazy(() => import('./room/Lobby'))
 
-const PAGES = ['timer', 'history', 'group', 'compete', 'account'] as const
+const PAGES = ['timer', 'history', 'room', 'compete', 'account'] as const
 type Page = (typeof PAGES)[number]
 
 function isPage(value: string | null): value is Page {
@@ -17,12 +18,12 @@ function isPage(value: string | null): value is Page {
 }
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
-// Invite links land on Compete and group links on Group; the return trip from
-// Google sign-in keeps the tab it left from.
+// Invite links land on Compete and group study links in that group study's
+// lobby; the return trip from Google sign-in keeps the tab it left from.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
+  if (roomFromUrl()) return 'room'
   if (params.has('invite')) return 'compete'
-  if (params.has('group')) return 'group'
   const tab = params.get('tab')
   return isPage(tab) ? tab : 'timer'
 }
@@ -54,16 +55,29 @@ function App() {
   const [sessionActive, setSessionActive] = useState(false)
   const [page, setPage] = useState<Page>(initialPage)
   const [historyKey, setHistoryKey] = useState(0)
+  // The group study this tab is in, if any (see room/useRoom.ts).
+  const [room, setRoom] = useState<string | null>(() => roomFromUrl() ?? savedRoom())
+  // Set by the lobby's Start studying click: the timer starts on arrival, while
+  // that click still counts as the gesture the screen picker needs.
+  const [autoStart, setAutoStart] = useState(false)
+  const shownPage = page === 'room' && !room ? 'compete' : page
+
+  useEffect(() => {
+    saveRoom(room)
+  }, [room])
 
   // replaceState rather than a new history entry: switching tabs shouldn't
   // fill up the Back button. Other parameters, like an invite code, survive.
   useEffect(() => {
     const params = new URLSearchParams(window.location.search)
-    if (page === 'timer') params.delete('tab')
-    else params.set('tab', page)
+    if (shownPage === 'timer') params.delete('tab')
+    else params.set('tab', shownPage)
+    // The room rides along in the URL, so a refresh stays in it.
+    if (room) params.set('room', room)
+    else params.delete('room')
     const query = params.toString()
     window.history.replaceState(null, '', query ? `/?${query}` : '/')
-  }, [page])
+  }, [shownPage, room])
 
   return (
     <>
@@ -71,28 +85,31 @@ function App() {
         <nav className="nav">
           <button
             type="button"
-            className={page === 'timer' ? 'nav-link active' : 'nav-link'}
+            className={shownPage === 'timer' ? 'nav-link active' : 'nav-link'}
             onClick={() => setPage('timer')}
           >
             Timer
           </button>
           <button
             type="button"
-            className={page === 'history' ? 'nav-link active' : 'nav-link'}
+            className={shownPage === 'history' ? 'nav-link active' : 'nav-link'}
             onClick={() => setPage('history')}
           >
             Sessions
           </button>
+          {room && (
+            <button
+              type="button"
+              className={shownPage === 'room' ? 'nav-link active' : 'nav-link'}
+              onClick={() => setPage('room')}
+            >
+              <span className="nav-live" aria-hidden="true" />
+              Group study
+            </button>
+          )}
           <button
             type="button"
-            className={page === 'group' ? 'nav-link active' : 'nav-link'}
-            onClick={() => setPage('group')}
-          >
-            Group
-          </button>
-          <button
-            type="button"
-            className={page === 'compete' ? 'nav-link active' : 'nav-link'}
+            className={shownPage === 'compete' ? 'nav-link active' : 'nav-link'}
             onClick={() => setPage('compete')}
           >
             Compete
@@ -100,9 +117,9 @@ function App() {
           {/* Settings-type page, so it sits apart from the tabs as an icon. */}
           <button
             type="button"
-            className={page === 'account' ? 'nav-gear active' : 'nav-gear'}
+            className={shownPage === 'account' ? 'nav-gear active' : 'nav-gear'}
             aria-label="Account"
-            aria-current={page === 'account' ? 'page' : undefined}
+            shownPage-current={page === 'account' ? 'page' : undefined}
             title="Account"
             onClick={() => setPage('account')}
           >
@@ -111,8 +128,12 @@ function App() {
         </nav>
       )}
 
-      {page === 'timer' && (
+      {shownPage === 'timer' && (
         <SessionTimer
+          room={room}
+          autoStart={autoStart}
+          onAutoStarted={() => setAutoStart(false)}
+          onLeaveRoom={() => setRoom(null)}
           onActiveChange={setSessionActive}
           onSessionSaved={() => {
             setHistoryKey((k) => k + 1)
@@ -125,21 +146,37 @@ function App() {
         />
       )}
 
-      {page === 'history' && <History key={historyKey} />}
+      {shownPage === 'history' && <History key={historyKey} />}
 
-      {page === 'group' && (
+      {shownPage === 'room' && room && (
         <Suspense fallback={null}>
-          <Group onStudy={() => setPage('timer')} />
+          <Lobby
+            code={room}
+            onStudy={() => {
+              setAutoStart(true)
+              setPage('timer')
+            }}
+            onLeave={() => {
+              setRoom(null)
+              setPage('compete')
+            }}
+          />
         </Suspense>
       )}
 
-      {page === 'compete' && (
+      {shownPage === 'compete' && (
         <Suspense fallback={null}>
-          <Compete />
+          <Compete
+            room={room}
+            onOpenRoom={(code) => {
+              setRoom(code)
+              setPage('room')
+            }}
+          />
         </Suspense>
       )}
 
-      {page === 'account' && <Account />}
+      {shownPage === 'account' && <Account />}
     </>
   )
 }
