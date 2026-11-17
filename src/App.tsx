@@ -7,8 +7,9 @@ import './App.css'
 // The auth and database SDK is big and only competition features use it, so
 // it loads on demand rather than slowing down the timer.
 const Compete = lazy(() => import('./compete/Compete'))
+const Group = lazy(() => import('./group/Group'))
 
-const PAGES = ['timer', 'history', 'compete', 'account'] as const
+const PAGES = ['timer', 'history', 'group', 'compete', 'account'] as const
 type Page = (typeof PAGES)[number]
 
 function isPage(value: string | null): value is Page {
@@ -16,10 +17,12 @@ function isPage(value: string | null): value is Page {
 }
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
-// Invite links and the return trip from Google sign-in land on Compete.
+// Invite links land on Compete and group links on Group; the return trip from
+// Google sign-in keeps the tab it left from.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
-  if (params.has('invite') || params.has('group')) return 'compete'
+  if (params.has('invite')) return 'compete'
+  if (params.has('group')) return 'group'
   const tab = params.get('tab')
   return isPage(tab) ? tab : 'timer'
 }
@@ -82,6 +85,13 @@ function App() {
           </button>
           <button
             type="button"
+            className={page === 'group' ? 'nav-link active' : 'nav-link'}
+            onClick={() => setPage('group')}
+          >
+            Group
+          </button>
+          <button
+            type="button"
             className={page === 'compete' ? 'nav-link active' : 'nav-link'}
             onClick={() => setPage('compete')}
           >
@@ -116,6 +126,12 @@ function App() {
       )}
 
       {page === 'history' && <History key={historyKey} />}
+
+      {page === 'group' && (
+        <Suspense fallback={null}>
+          <Group onStudy={() => setPage('timer')} />
+        </Suspense>
+      )}
 
       {page === 'compete' && (
         <Suspense fallback={null}>

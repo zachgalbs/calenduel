@@ -12,6 +12,7 @@ import {
   writeActive,
   type ActiveSession,
 } from './session/activeSession'
+import { startPresence } from './group/presence'
 import { sortSessions } from './subjects/sort'
 
 // File a just-saved session under a subject, in the background.
@@ -89,6 +90,12 @@ export default function SessionTimer({
       window.removeEventListener('pagehide', beat)
     }
   }, [status, startedAt, task])
+
+  // Shows you as studying now in your study groups (the Group tab).
+  useEffect(() => {
+    if (status !== 'running' || startedAt === null) return
+    return startPresence(startedAt)
+  }, [status, startedAt])
 
   // Ask before a refresh or close throws away a session in progress.
   useEffect(() => {

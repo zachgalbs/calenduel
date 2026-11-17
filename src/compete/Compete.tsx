@@ -1,10 +1,6 @@
 import { useCallback, useEffect, useState, type FormEvent } from 'react'
 import {
   addFriend,
-  groupPreview,
-  joinGroup,
-  myGroupCode,
-  type GroupPreview,
   ensureProfile,
   fetchDailyTotals,
   fetchFriendSessions,
@@ -345,135 +341,7 @@ function InviteForm({
   )
 }
 
-// The ?group= code from a study group link, if this page was opened with one.
-function linkedGroupCode(): string | null {
-  return new URLSearchParams(window.location.search).get('group')
-}
-
-// Shown when the page was opened from someone's group link. Like an invite link,
-// it only fills in what joining would do; joining shares your sessions with the
-// whole group, so it takes a click.
-function GroupJoin({ code, onJoined }: { code: string; onJoined: () => void }) {
-  const [preview, setPreview] = useState<GroupPreview | null | undefined>(undefined)
-  const [joining, setJoining] = useState(false)
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-
-  useEffect(() => {
-    let closed = false
-    groupPreview(code)
-      .then((p) => {
-        if (!closed) setPreview(p)
-      })
-      .catch((err) => {
-        if (!closed) setError(errorText(err))
-      })
-    return () => {
-      closed = true
-    }
-  }, [code])
-
-  function dismiss() {
-    window.history.replaceState(null, '', '/?tab=compete')
-  }
-
-  async function handleJoin() {
-    setError(null)
-    setJoining(true)
-    try {
-      const added = await joinGroup(code)
-      setMessage(
-        added > 0
-          ? `You're in. You're now competing with ${plural(added, 'more person', 'more people')}.`
-          : "You're in. You were already friends with everyone in it.",
-      )
-      dismiss()
-      onJoined()
-    } catch (err) {
-      setError(errorText(err))
-    } finally {
-      setJoining(false)
-    }
-  }
-
-  if (message) return <p className="compete-note group-join" role="status">{message}</p>
-  if (preview === undefined && !error) return null
-
-  return (
-    <section className="compete-section group-join">
-      {preview === null && <p className="compete-note">This group link doesn't match any group.</p>}
-      {preview && preview.joined && (
-        <p className="compete-note">You're already in {preview.ownerName}'s study group.</p>
-      )}
-      {preview && !preview.joined && (
-        <>
-          <h2>Join {preview.ownerName}'s study group?</h2>
-          <p className="compete-note">
-            You'll become friends with the {plural(preview.members, 'person', 'people')} in
-            it, and with anyone who joins later. They'll see your sessions from today on,
-            and you'll see theirs.
-          </p>
-          <div className="invite-row">
-            <button
-              type="button"
-              className="compete-btn primary"
-              onClick={handleJoin}
-              disabled={joining}
-            >
-              {joining ? 'Joining...' : 'Join group'}
-            </button>
-          </div>
-        </>
-      )}
-      {error && <p className="compete-error" role="alert">{error}</p>}
-    </section>
-  )
-}
-
-// Your own group link: post it once in the group chat instead of everyone
-// swapping codes with everyone.
-function GroupLink() {
-  const [copied, setCopied] = useState(false)
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleCopy() {
-    setError(null)
-    setBusy(true)
-    let link = ''
-    try {
-      link = `${window.location.origin}/?group=${await myGroupCode()}`
-      await navigator.clipboard.writeText(link)
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch (err) {
-      setError(link ? `Couldn't copy the link. Here it is: ${link}` : errorText(err))
-    } finally {
-      setBusy(false)
-    }
-  }
-
-  return (
-    <section className="compete-section">
-      <h2>Study group</h2>
-      <p className="compete-note">
-        Studying with a group? Post this link in your group chat. Everyone who
-        joins through it becomes friends with everyone else in the group, so
-        nobody has to swap codes.
-      </p>
-      <div className="invite-row">
-        <button type="button" className="compete-btn" onClick={handleCopy} disabled={busy}>
-          {copied ? 'Copied' : 'Copy group link'}
-        </button>
-      </div>
-      {error && <p className="compete-error" role="alert">{error}</p>}
-    </section>
-  )
-}
-
 export default function Compete() {
-  // Read once: joining clears it from the URL, but the result should stay up.
-  const [groupCode] = useState(linkedGroupCode)
   // null = still finding out.
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [board, setBoard] = useState<Board | null>(null)
@@ -566,9 +434,6 @@ export default function Compete() {
             Every day is a contest. Whoever studies the most by midnight wins it,
             and your record builds up day by day.
           </p>
-          {groupCode && (
-            <p className="compete-note">Sign in to join the study group you were sent.</p>
-          )}
           <button type="button" className="compete-btn primary" onClick={handleSignIn}>
             Sign in with Google
           </button>
@@ -584,8 +449,6 @@ export default function Compete() {
 
       {board && (
         <>
-          {groupCode && <GroupJoin code={groupCode} onJoined={refresh} />}
-
           {board.failedUploads > 0 && (
             <p className="compete-error" role="alert">
               {plural(board.failedUploads, 'session')} couldn't be uploaded and
@@ -658,8 +521,6 @@ export default function Compete() {
           )}
 
           <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} />
-
-          <GroupLink />
 
           <button type="button" className="compete-link" onClick={handleSignOut}>
             Sign out {board.profile.name}

@@ -25,6 +25,10 @@
 
   /* Status */
   --error: #b54a3a;
+  /* Studying right now (Group rooms): a muted sage beside the gold. */
+  --live: #4f8a5b;
+  --live-bg: rgba(79, 138, 91, 0.06);
+  --live-border: rgba(79, 138, 91, 0.35);
 
   /* Type stacks */
   --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui,
@@ -63,6 +67,10 @@
     --accent-border: rgba(201, 169, 97, 0.4);
 
     --error: #e88a7a;
+
+    --live: #7fbf8a;
+    --live-bg: rgba(127, 191, 138, 0.07);
+    --live-border: rgba(127, 191, 138, 0.35);
   }
 }
 

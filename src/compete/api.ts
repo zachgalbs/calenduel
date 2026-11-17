@@ -53,11 +53,12 @@ export async function focusToken(): Promise<string | null> {
   return data?.session?.token ?? null
 }
 
-// Leaves the page for Google, then returns to the Compete tab. Anything already
-// in the URL, like an invite code, survives the round trip.
-export async function signIn(): Promise<void> {
+// Leaves the page for Google, then returns to the tab it left from (Compete
+// unless told otherwise). Anything already in the URL, like an invite code,
+// survives the round trip.
+export async function signIn(tab: 'compete' | 'group' = 'compete'): Promise<void> {
   const params = new URLSearchParams(window.location.search)
-  params.set('tab', 'compete')
+  params.set('tab', tab)
   const { error } = await neon.auth.signIn.social({
     provider: 'google',
     callbackURL: `${window.location.origin}/?${params}`,
@@ -154,6 +155,87 @@ export async function joinGroup(code: string): Promise<number> {
   const { data, error } = await neon.rpc('join_group', { group_code: code })
   if (error) fail(error)
   return data as number
+}
+
+// Group rooms (db/migrations/009).
+export interface StudyGroup {
+  id: string
+  name: string
+  ownerName: string
+  code: string
+  isOwner: boolean
+  members: number
+}
+
+export interface RoomMember {
+  id: string
+  name: string
+  avatar: string | null
+  todayMs: number // finished sessions today
+  studyingSince: number | null // live session start, if studying now
+}
+
+export async function myGroups(): Promise<StudyGroup[]> {
+  const { data, error } = await neon.rpc('my_groups')
+  if (error) fail(error)
+  return (
+    data as {
+      group_id: string
+      name: string
+      owner_name: string
+      code: string
+      is_owner: boolean
+      members: number
+    }[]
+  ).map((g) => ({
+    id: g.group_id,
+    name: g.name,
+    ownerName: g.owner_name,
+    code: g.code,
+    isOwner: g.is_owner,
+    members: g.members,
+  }))
+}
+
+export async function groupRoom(groupId: string, today: string): Promise<RoomMember[]> {
+  const { data, error } = await neon.rpc('group_room', { target: groupId, today })
+  if (error) fail(error)
+  return (
+    data as {
+      user_id: string
+      display_name: string
+      avatar: string | null
+      today_ms: number | string
+      studying_since: string | null
+    }[]
+  ).map((m) => ({
+    id: m.user_id,
+    name: m.display_name,
+    avatar: m.avatar,
+    todayMs: Number(m.today_ms),
+    studyingSince: m.studying_since ? Date.parse(m.studying_since) : null,
+  }))
+}
+
+export async function renameGroup(groupId: string, name: string): Promise<void> {
+  const { error } = await neon.rpc('rename_group', { target: groupId, new_name: name })
+  if (error) fail(error)
+}
+
+export async function leaveGroup(groupId: string): Promise<void> {
+  const { error } = await neon.rpc('leave_group', { target: groupId })
+  if (error) fail(error)
+}
+
+// Live presence: "studying now, since startedAt", for the people in your groups.
+export async function heartbeat(startedAt: number): Promise<void> {
+  const { error } = await neon.rpc('heartbeat', { started: new Date(startedAt).toISOString() })
+  if (error) fail(error)
+}
+
+export async function endLive(): Promise<void> {
+  const { error } = await neon.rpc('end_live')
+  if (error) fail(error)
 }
 
 export async function removeFriend(friendId: string): Promise<void> {
