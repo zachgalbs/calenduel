@@ -372,3 +372,16 @@
   flex-basis: 100%;
   margin: 0;
 }
+
+/* Studying right now. */
+.live-dot {
+  display: inline-block;
+  flex: none;
+  width: 8px;
+  height: 8px;
+  margin-left: 6px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 25%, transparent);
+  vertical-align: middle;
+}

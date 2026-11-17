@@ -8,6 +8,7 @@ import {
   FRIEND_SESSION_LIMIT,
   isSignedIn,
   listFriends,
+  studyingNow,
   removeFriend,
   signIn,
   signOut,
@@ -29,6 +30,12 @@ import Experimental from '../focus/Experimental'
 import './Compete.css'
 
 const REFRESH_MS = 60_000
+// Who's studying right now is re-read more often than the scores.
+const LIVE_MS = 20_000
+
+function LiveDot({ on }: { on: boolean }) {
+  return on ? <span className="live-dot" role="img" aria-label="studying now" title="Studying now" /> : null
+}
 
 interface Board {
   profile: Profile
@@ -123,12 +130,14 @@ function FriendCard({
   me,
   totals,
   today,
+  live,
   onRemoved,
 }: {
   friend: Friend
   me: Profile
   totals: DailyTotal[]
   today: string
+  live: boolean
   onRemoved: () => void
 }) {
   const [confirming, setConfirming] = useState(false)
@@ -152,6 +161,7 @@ function FriendCard({
         <div className="rival-who">
           <Avatar name={friend.name} src={friend.avatar} />
           <h3 className="rival-name">{friend.name}</h3>
+          <LiveDot on={live} />
         </div>
         <p className="rival-since">since {shortDay(friend.since)}</p>
       </div>
@@ -405,6 +415,7 @@ export default function Compete({
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [board, setBoard] = useState<Board | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [live, setLive] = useState<Set<string>>(() => new Set())
 
   const refresh = useCallback(async () => {
     try {
@@ -444,6 +455,29 @@ export default function Compete({
       document.removeEventListener('visibilitychange', onVisible)
     }
   }, [refresh])
+
+  // The green dots. A failed read keeps the last answer: dots are a nicety.
+  const signedInNow = signedIn === true
+  useEffect(() => {
+    if (!signedInNow) return
+    let closed = false
+    const read = () => {
+      if (document.visibilityState !== 'visible') return
+      studyingNow()
+        .then((ids) => {
+          if (!closed) setLive(ids)
+        })
+        .catch((err) => console.error('live status failed', err))
+    }
+    read()
+    const timer = setInterval(read, LIVE_MS)
+    document.addEventListener('visibilitychange', read)
+    return () => {
+      closed = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', read)
+    }
+  }, [signedInNow])
 
   async function handleSignIn() {
     setError(null)
@@ -542,6 +576,7 @@ export default function Compete({
                   <Avatar name={s.name} src={avatars.get(s.id) ?? null} />
                   <span className="standing-name">
                     {s.id === board.profile.id ? 'You' : s.name}
+                    <LiveDot on={live.has(s.id)} />
                   </span>
                   <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
                   <span
@@ -574,6 +609,7 @@ export default function Compete({
                     me={board.profile}
                     totals={board.totals}
                     today={board.today}
+                    live={live.has(f.id)}
                     onRemoved={refresh}
                   />
                 ))}

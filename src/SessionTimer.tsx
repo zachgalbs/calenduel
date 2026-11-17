@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useLiveBeat } from './compete/useLiveBeat'
 import Stopwatch from './Stopwatch'
 import { useTimelapseRecorder } from './session/useTimelapseRecorder'
 import { downloadBlob, timelapseName } from './media/share'
@@ -85,6 +86,9 @@ export default function SessionTimer({
   useEffect(() => {
     onActiveChange(inProgress)
   }, [inProgress, onActiveChange])
+
+  // The green dot friends see on Compete while this session runs.
+  useLiveBeat(status === 'running' ? startedAt : null)
 
   // While running, keep a record that outlives the page, refreshed on a
   // heartbeat and once more as the page goes away.

@@ -225,6 +225,22 @@ export async function leaveRoom(code: string): Promise<void> {
   if (error) fail(error)
 }
 
+// "I'm in a session that started at studyingSince" (null: not anymore).
+// Friends see a green dot on Compete while the last beat is under 90 s old.
+export async function liveBeat(studyingSince: number | null): Promise<void> {
+  const { error } = await neon.rpc('live_beat', {
+    studying: studyingSince === null ? null : new Date(studyingSince).toISOString(),
+  })
+  if (error) fail(error)
+}
+
+// Ids of you and your friends who are in a session right now.
+export async function studyingNow(): Promise<Set<string>> {
+  const { data, error } = await neon.rpc('studying_now')
+  if (error) fail(error)
+  return new Set((data as { user_id: string }[]).map((r) => r.user_id))
+}
+
 export async function removeFriend(friendId: string): Promise<void> {
   const { error } = await neon.rpc('remove_friend', { friend: friendId })
   if (error) fail(error)
