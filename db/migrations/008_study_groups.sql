@@ -138,3 +138,7 @@ grant execute on function public.group_preview(text) to authenticated;
 grant execute on function public.join_group(text)    to authenticated;
 
 commit;
+
+-- The Data API caches the schema; without this it answers "Could not find the
+-- function" until it happens to reload.
+notify pgrst, 'reload schema';
