@@ -139,6 +139,7 @@ grant execute on function public.join_group(text)    to authenticated;
 
 commit;
 
--- The Data API caches the schema; without this it answers "Could not find the
--- function" until it happens to reload.
-notify pgrst, 'reload schema';
+-- Afterwards, refresh the Data API's schema cache, or it answers "Could not
+-- find the function" for the new functions. On Neon, NOTIFY pgrst doesn't do
+-- it: re-save the Data API settings (console, or update_data_api), which
+-- refreshes the cache.
