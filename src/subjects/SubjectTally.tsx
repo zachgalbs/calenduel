@@ -21,24 +21,41 @@ import {
   canonicalSubject,
   cleanSubject,
   knownSubjects,
-  periodStartDay,
+  periodRange,
   removeUpdates,
   renameUpdates,
   resortUpdates,
   subjectKey,
   subjectTotals,
+  type DayRange,
   type Period,
 } from './subjects'
 import './Subjects.css'
 
 const PERIOD_KEY = 'calenduel.subjectPeriod'
+const RANGE_KEY = 'calenduel.subjectRange'
+const DAY = /^\d{4}-\d{2}-\d{2}$/
 
 function readPeriod(): Period {
   try {
     const p = localStorage.getItem(PERIOD_KEY)
-    if (p === 'week' || p === 'month' || p === 'all') return p
+    if (PERIODS.some((x) => x.id === p)) return p as Period
   } catch { /* storage blocked */ }
   return 'month'
+}
+
+// The last custom range, or the past 7 days the first time.
+function readRange(today: string): DayRange {
+  try {
+    const r = JSON.parse(localStorage.getItem(RANGE_KEY) ?? 'null') as Partial<DayRange> | null
+    const ok = (d: unknown) => (typeof d === 'string' && DAY.test(d) ? d : null)
+    if (r) return { from: ok(r.from), to: ok(r.to) }
+  } catch { /* storage blocked or bad JSON */ }
+  return periodRange('week', today)
+}
+
+function save(key: string, value: string) {
+  try { localStorage.setItem(key, value) } catch { /* storage blocked */ }
 }
 
 function Status({ report, auto, onTurnOn, onTurnOff }: {
@@ -263,6 +280,7 @@ export default function SubjectTally() {
   const [saved, setSaved] = useState(savedSubjects)
   // Fixed for the visit, like Stats.
   const [today] = useState(() => localDay(Date.now()))
+  const [custom, setCustom] = useState<DayRange>(() => readRange(today))
 
   const sort = useCallback(() => {
     setReport(null)
@@ -299,7 +317,12 @@ export default function SubjectTally() {
   if (!sessions) return <p className="account-note">Loading...</p>
 
   const subjects = knownSubjects(sessions, saved.map((s) => s.name))
-  const totals = subjectTotals(sessions, periodStartDay(period, today))
+  const totals = subjectTotals(sessions, periodRange(period, today, custom))
+  const setEnd = (end: keyof DayRange, value: string) => {
+    const next = { ...custom, [end]: DAY.test(value) ? value : null }
+    setCustom(next)
+    save(RANGE_KEY, JSON.stringify(next))
+  }
   const sum = totals.reduce((n, t) => n + t.ms, 0)
   const max = Math.max(0, ...totals.map((t) => t.ms))
 
@@ -313,13 +336,36 @@ export default function SubjectTally() {
             aria-pressed={period === p.id}
             onClick={() => {
               setPeriod(p.id)
-              try { localStorage.setItem(PERIOD_KEY, p.id) } catch { /* storage blocked */ }
+              save(PERIOD_KEY, p.id)
             }}
           >
             {p.label}
           </button>
         ))}
       </div>
+
+      {period === 'custom' && (
+        <div className="subject-range">
+          <label>
+            From
+            <input
+              type="date"
+              value={custom.from ?? ''}
+              max={today}
+              onChange={(e) => setEnd('from', e.target.value)}
+            />
+          </label>
+          <label>
+            To
+            <input
+              type="date"
+              value={custom.to ?? ''}
+              max={today}
+              onChange={(e) => setEnd('to', e.target.value)}
+            />
+          </label>
+        </div>
+      )}
 
       {totals.length === 0 ? (
         <p className="account-note">No study time in this period.</p>

@@ -6,7 +6,7 @@ import {
   knownSubjects,
   localSubject,
   needsSorting,
-  periodStartDay,
+  periodRange,
   removeUpdates,
   renameUpdates,
   resortUpdates,
@@ -172,18 +172,37 @@ describe('subjectTotals', () => {
       session('d', null, '2026-11-10', 5), // not sorted yet
       session('e', { name: 'CHEM 1A' }, '2026-10-01', 9), // before the window
     ]
-    const totals = subjectTotals(sessions, periodStartDay('week', '2026-11-10'))
+    const totals = subjectTotals(sessions, periodRange('week', '2026-11-10'))
     expect(totals.map((t) => [t.name, t.ms / HOUR, t.sessions])).toEqual([
       ['CHEM 1A', 4, 1],
       ['CS 10', 3, 2],
       [null, 5, 1],
     ])
-    expect(subjectTotals(sessions, null)[0]).toMatchObject({ name: 'CHEM 1A', ms: 13 * HOUR })
+    expect(subjectTotals(sessions, periodRange('all', '2026-11-10'))[0]).toMatchObject({ name: 'CHEM 1A', ms: 13 * HOUR })
+  })
+  it('counts one day, and a custom range with both ends included', () => {
+    const sessions = [
+      session('a', { name: 'CS 10' }, '2026-11-10', 2),
+      session('b', { name: 'CS 10' }, '2026-11-09', 1),
+      session('c', { name: 'CHEM 1A' }, '2026-11-08', 4),
+      session('d', { name: 'CHEM 1A' }, '2026-11-07', 8),
+    ]
+    const hours = (r: ReturnType<typeof periodRange>) =>
+      subjectTotals(sessions, r).map((t) => [t.name, t.ms / HOUR])
+    expect(hours(periodRange('day', '2026-11-10'))).toEqual([['CS 10', 2]])
+    const custom = { from: '2026-11-08', to: '2026-11-09' }
+    expect(hours(periodRange('custom', '2026-11-10', custom))).toEqual([['CHEM 1A', 4], ['CS 10', 1]])
+    // Ends typed backwards still mean the same days.
+    const backwards = { from: '2026-11-09', to: '2026-11-08' }
+    expect(hours(periodRange('custom', '2026-11-10', backwards))).toEqual([['CHEM 1A', 4], ['CS 10', 1]])
+    // A blank end is open on that side.
+    expect(hours(periodRange('custom', '2026-11-10', { from: '2026-11-09', to: null }))).toEqual([['CS 10', 3]])
   })
   it('uses whole days, the same as Stats', () => {
-    expect(periodStartDay('week', '2026-11-10')).toBe('2026-11-04')
-    expect(periodStartDay('month', '2026-11-10')).toBe('2026-10-12')
-    expect(periodStartDay('all', '2026-11-10')).toBeNull()
+    expect(periodRange('day', '2026-11-10')).toEqual({ from: '2026-11-10', to: '2026-11-10' })
+    expect(periodRange('week', '2026-11-10')).toEqual({ from: '2026-11-04', to: '2026-11-10' })
+    expect(periodRange('month', '2026-11-10')).toEqual({ from: '2026-10-12', to: '2026-11-10' })
+    expect(periodRange('all', '2026-11-10')).toEqual({ from: null, to: null })
   })
 })
 

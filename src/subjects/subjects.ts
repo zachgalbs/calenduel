@@ -172,20 +172,34 @@ export function subjectExamples(
   return out
 }
 
-export type Period = 'week' | 'month' | 'all'
+export type Period = 'day' | 'week' | 'month' | 'all' | 'custom'
 
 export const PERIODS: { id: Period; label: string }[] = [
+  { id: 'day', label: 'Today' },
   { id: 'week', label: '7 days' },
   { id: 'month', label: '30 days' },
   { id: 'all', label: 'All time' },
+  { id: 'custom', label: 'Custom' },
 ]
 
-// The first day counted, by the same day rule as Stats: a session counts
-// toward the day it started, in your timezone.
-export function periodStartDay(period: Period, today: string): string | null {
-  if (period === 'week') return addDays(today, -6)
-  if (period === 'month') return addDays(today, -29)
-  return null
+// First and last day counted, both included. null: no bound on that side.
+export interface DayRange {
+  from: string | null
+  to: string | null
+}
+
+// By the same day rule as Stats: a session counts toward the day it
+// started, in your timezone. `custom` is only used for the Custom period;
+// its ends may come in either order, and a blank end is open.
+export function periodRange(period: Period, today: string, custom?: DayRange): DayRange {
+  if (period === 'day') return { from: today, to: today }
+  if (period === 'week') return { from: addDays(today, -6), to: today }
+  if (period === 'month') return { from: addDays(today, -29), to: today }
+  if (period === 'custom' && custom) {
+    const { from, to } = custom
+    return from && to && from > to ? { from: to, to: from } : custom
+  }
+  return { from: null, to: null }
 }
 
 export interface SubjectTotal {
@@ -196,10 +210,11 @@ export interface SubjectTotal {
 }
 
 // Time per subject since `fromDay` (inclusive), most first, unsorted last.
-export function subjectTotals(sessions: SessionMeta[], fromDay: string | null): SubjectTotal[] {
+export function subjectTotals(sessions: SessionMeta[], range: DayRange): SubjectTotal[] {
   const totals = new Map<string | null, SubjectTotal>()
   for (const s of sessions) {
-    if (fromDay !== null && localDay(s.startedAt) < fromDay) continue
+    const day = localDay(s.startedAt)
+    if ((range.from !== null && day < range.from) || (range.to !== null && day > range.to)) continue
     const name = subjectOf(s)?.name ?? null
     const key = name === null ? null : subjectKey(name)
     const total = totals.get(key) ?? { name, ms: 0, sessions: 0 }
