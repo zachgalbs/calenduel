@@ -63,6 +63,10 @@ export function useNow(active: boolean): number {
 export function useRoom(code: string, studyingSince: number | null) {
   const [state, setState] = useState<RoomState | null>(null)
   const [error, setError] = useState<string | null>(null)
+  // Two beats in a row failed: the others can't see you. Said out loud, since
+  // a silent failure looks exactly like "not studying" to everyone else.
+  const [beatFailing, setBeatFailing] = useState(false)
+  const failuresRef = useRef(0)
   const studyingRef = useRef(studyingSince)
 
   const load = useCallback(async () => {
@@ -79,14 +83,19 @@ export function useRoom(code: string, studyingSince: number | null) {
     try {
       const { roomBeat } = await import('../compete/api')
       await roomBeat(code, studyingRef.current)
-    } catch {
-      // The next beat tries again; the room view shows if it keeps failing.
+      failuresRef.current = 0
+      setBeatFailing(false)
+    } catch (err) {
+      console.error('group study presence failed', err)
+      failuresRef.current += 1
+      if (failuresRef.current >= 2) setBeatFailing(true)
     }
   }, [code])
 
   // Starting or stopping a session tells the room at once.
   useEffect(() => {
     studyingRef.current = studyingSince
+    // eslint-disable-next-line react-hooks/set-state-in-effect -- presence sync, not derived state
     void beat().then(load)
   }, [studyingSince, beat, load])
 
@@ -104,7 +113,7 @@ export function useRoom(code: string, studyingSince: number | null) {
     }
   }, [beat, load])
 
-  return { state, error, reload: load }
+  return { state, error, beatFailing, reload: load }
 }
 
 // A member's time in this group study, counting a session running now.

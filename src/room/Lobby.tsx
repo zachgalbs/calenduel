@@ -1,8 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { RoomPreview } from '../compete/api'
 import Members from './Members'
-import { memberMs, roomLink, useNow, useRoom } from './useRoom'
-import { formatStudyTime } from '../compete/stats'
+import { roomLink, useNow, useRoom } from './useRoom'
 import './Room.css'
 
 function errorText(err: unknown): string {
@@ -19,7 +18,7 @@ type Props = { code: string; onStudy: () => void; onLeave: () => void }
 // start it. Once started, everyone gets a Start studying button: each person's
 // own click, since the browser only lets a click share a screen.
 function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
-  const { state, error } = useRoom(code, null)
+  const { state, error, beatFailing } = useRoom(code, null)
   const [copied, setCopied] = useState(false)
   const [starting, setStarting] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
@@ -29,7 +28,6 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
   const me = state?.members.find((m) => m.id === myId)
   const isHost = me?.isHost ?? false
   const here = state?.members.filter((m) => m.here).length ?? 0
-  const together = state?.members.reduce((sum, m) => sum + memberMs(m, now), 0) ?? 0
   const started = state?.startedAt != null
 
   async function handleCopy() {
@@ -97,13 +95,6 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
       {state === null && !error && <p className="room-note">Loading...</p>}
       {state && <Members members={state.members} myId={myId} now={now} />}
 
-      {started && together > 0 && (
-        <div className="room-together">
-          <span className="room-together-label">Studied together</span>
-          <span className="room-together-time">{formatStudyTime(together)}</span>
-        </div>
-      )}
-
       <div className="room-cta">
         {!started && isHost && (
           <>
@@ -150,6 +141,11 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
         </button>
       </div>
 
+      {beatFailing && !error && (
+        <p className="room-error" role="alert">
+          Can't reach the group study, so the others may not see you. Check your connection.
+        </p>
+      )}
       {(error || actionError) && (
         <p className="room-error" role="alert">{actionError ?? error}</p>
       )}
