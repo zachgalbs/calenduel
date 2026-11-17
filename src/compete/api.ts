@@ -127,6 +127,35 @@ export async function addFriend(code: string): Promise<string> {
   return data as string
 }
 
+// Study groups (db/migrations/008): one link that connects a whole group.
+export interface GroupPreview {
+  ownerName: string
+  members: number
+  joined: boolean
+}
+
+// The caller's own group link code, made on first use.
+export async function myGroupCode(): Promise<string> {
+  const { data, error } = await neon.rpc('my_group_code')
+  if (error) fail(error)
+  return data as string
+}
+
+// Whose group a link is for, or null if the link doesn't match one.
+export async function groupPreview(code: string): Promise<GroupPreview | null> {
+  const { data, error } = await neon.rpc('group_preview', { group_code: code })
+  if (error) fail(error)
+  const row = (data as { owner_name: string; members: number; joined: boolean }[])[0]
+  return row ? { ownerName: row.owner_name, members: row.members, joined: row.joined } : null
+}
+
+// Joins and connects with everyone in the group. Returns how many new friends.
+export async function joinGroup(code: string): Promise<number> {
+  const { data, error } = await neon.rpc('join_group', { group_code: code })
+  if (error) fail(error)
+  return data as number
+}
+
 export async function removeFriend(friendId: string): Promise<void> {
   const { error } = await neon.rpc('remove_friend', { friend: friendId })
   if (error) fail(error)

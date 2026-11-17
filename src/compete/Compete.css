@@ -340,3 +340,10 @@
 .compete-link:hover {
   color: var(--text-h);
 }
+
+/* A group link opened this page: ask first, above the scoreboard. */
+.group-join {
+  padding: 14px 16px;
+  border: 1px solid var(--border-strong);
+  border-radius: 8px;
+}

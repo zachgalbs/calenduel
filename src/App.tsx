@@ -19,7 +19,7 @@ function isPage(value: string | null): value is Page {
 // Invite links and the return trip from Google sign-in land on Compete.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
-  if (params.has('invite')) return 'compete'
+  if (params.has('invite') || params.has('group')) return 'compete'
   const tab = params.get('tab')
   return isPage(tab) ? tab : 'timer'
 }
