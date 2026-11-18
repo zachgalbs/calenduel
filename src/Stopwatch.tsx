@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { NOT_PAUSED, studiedMs, type PauseState } from './session/elapsed'
 import './Stopwatch.css'
 
 // Deliberately almost nothing: one big number (whole minutes) with the seconds
@@ -24,14 +25,18 @@ function spokenTime(ms: number): string {
 
 // Elapsed is derived from timestamps, never accumulated, so it can't drift.
 // startedAt null = idle (reads 0); stoppedAt set = frozen at the final time.
+// Breaks don't count, so a paused stopwatch stands still.
 export default function Stopwatch({
   startedAt,
   stoppedAt,
+  pause = NOT_PAUSED,
 }: {
   startedAt: number | null
   stoppedAt: number | null
+  pause?: PauseState
 }) {
-  const running = startedAt !== null && stoppedAt === null
+  const paused = pause.pausedAt !== null
+  const running = startedAt !== null && stoppedAt === null && !paused
   const [now, setNow] = useState(() => Date.now())
 
   // Tick while running. setNow lives in the interval callback, not the effect
@@ -42,15 +47,17 @@ export default function Stopwatch({
     return () => clearInterval(id)
   }, [running])
 
-  const elapsed =
-    startedAt === null ? 0 : Math.max(0, (stoppedAt ?? now) - startedAt)
+  // While paused, read at the pause itself: `now` stops updating then.
+  const at = stoppedAt ?? (paused ? pause.pausedAt! : now)
+  const elapsed = startedAt === null ? 0 : studiedMs(startedAt, at, pause)
   const seconds = String(Math.floor((elapsed % LAP_MS) / 1000)).padStart(2, '0')
 
   return (
     <div
       className="stopwatch"
+      data-paused={paused && stoppedAt === null}
       role="timer"
-      aria-label={spokenTime(elapsed)}
+      aria-label={paused && stoppedAt === null ? `Paused at ${spokenTime(elapsed)}` : spokenTime(elapsed)}
     >
       <span className="stopwatch-minutes" aria-hidden="true">
         {formatMinutes(elapsed)}

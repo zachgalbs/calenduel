@@ -43,6 +43,9 @@ export interface RecorderHandle {
   // The second window's stream while it's captured (null otherwise), for the
   // on-page preview.
   ipadStream: MediaStream | null
+  // Stop or restart taking frames for a break. The feeds stay live, so
+  // resuming needs no picker.
+  setPaused: (paused: boolean) => void
   // Stop recording, release both streams, and resolve with the timelapse clip
   // or the reason there isn't one.
   end: () => Promise<TimelapseResult>
@@ -253,6 +256,10 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     setStreams({ face, screen })
   }, [])
 
+  const setPaused = useCallback((paused: boolean) => {
+    timelapseRef.current?.setPaused(paused)
+  }, [])
+
   const end = useCallback(async () => {
     // stop() clears the sampling timer synchronously, so releasing the streams
     // right after is safe — the lights go off while the final flush runs.
@@ -281,6 +288,7 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     addIpad,
     removeIpad,
     ipadStream: ipad,
+    setPaused,
     end,
   }
 }

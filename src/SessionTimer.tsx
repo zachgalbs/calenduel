@@ -9,12 +9,14 @@ import {
   clearActive,
   HEARTBEAT_MS,
   interruptedSession,
+  pauseOf,
   tabId,
   writeActive,
   type ActiveSession,
 } from './session/activeSession'
 import RoomPanel from './room/RoomPanel'
 import { sortSessions } from './subjects/sort'
+import { NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
 
 // File a just-saved session under a subject, in the background.
 function sortIntoSubject() {
@@ -27,6 +29,10 @@ type Status = 'idle' | 'starting' | 'running' | 'encoding' | 'done'
 // Resuming carries on the same session, gap included, so it's only offered
 // soon after it stopped: a refresh, not a laptop closed overnight.
 const RESUME_WINDOW_MS = 10 * 60_000
+
+// A break this long ends the session: it was probably forgotten, and the
+// screen share shouldn't sit open all afternoon. The study time is saved.
+const PAUSE_LIMIT_MS = 30 * 60_000
 
 // Error names like QuotaExceededError are the useful part when someone sends a
 // screenshot of a failure.
@@ -55,6 +61,12 @@ export default function SessionTimer({
   const [status, setStatus] = useState<Status>('idle')
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [stoppedAt, setStoppedAt] = useState<number | null>(null)
+  const [pause, setPause] = useState<PauseState>(NOT_PAUSED)
+  const paused = pause.pausedAt !== null
+  // When the current stretch of studying began (the start, or the last resume).
+  // That's what the group study gets: it banks each stretch when it ends, so
+  // sending the session's start again after a break would count time twice.
+  const [stretchFrom, setStretchFrom] = useState<number | null>(null)
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Optional, and never required to start: Start stays one click. It can be
@@ -71,8 +83,16 @@ export default function SessionTimer({
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
   // onInterrupted = stop the session if the browser's "Stop sharing" is hit.
-  const { faceVideoRef, streaming, begin, addIpad, removeIpad, ipadStream, end } =
-    useTimelapseRecorder(() => handleStop())
+  const {
+    faceVideoRef,
+    streaming,
+    begin,
+    addIpad,
+    removeIpad,
+    ipadStream,
+    setPaused: setRecorderPaused,
+    end,
+  } = useTimelapseRecorder(() => handleStop())
   // Guards the stop path against firing twice (Stop button + screen-share end).
   const stoppingRef = useRef(false)
 
@@ -87,15 +107,23 @@ export default function SessionTimer({
     onActiveChange(inProgress)
   }, [inProgress, onActiveChange])
 
-  // The green dot friends see on Compete while this session runs.
-  useLiveBeat(status === 'running' ? startedAt : null)
+  // The green dot friends see on Compete while this session runs. Off during
+  // a break: the dot means studying now.
+  useLiveBeat(status === 'running' && !paused ? startedAt : null)
 
   // While running, keep a record that outlives the page, refreshed on a
   // heartbeat and once more as the page goes away.
   useEffect(() => {
     if (status !== 'running' || startedAt === null) return
     const beat = () =>
-      writeActive({ startedAt, name: task, lastSeen: Date.now(), tabId: tabId() })
+      writeActive({
+        startedAt,
+        name: task,
+        lastSeen: Date.now(),
+        tabId: tabId(),
+        pausedMs: pause.pausedMs,
+        pausedAt: pause.pausedAt,
+      })
     beat()
     const timer = setInterval(beat, HEARTBEAT_MS)
     window.addEventListener('pagehide', beat)
@@ -103,7 +131,23 @@ export default function SessionTimer({
       clearInterval(timer)
       window.removeEventListener('pagehide', beat)
     }
-  }, [status, startedAt, task])
+  }, [status, startedAt, task, pause])
+
+  // End a break that's run too long. Through a ref, so the timer always calls
+  // the current handleStop (the name can still change during a break).
+  const stopRef = useRef<() => void>(() => {})
+  useEffect(() => {
+    stopRef.current = () => void handleStop()
+  })
+  useEffect(() => {
+    if (status !== 'running' || pause.pausedAt === null) return
+    const left = PAUSE_LIMIT_MS - (Date.now() - pause.pausedAt)
+    const timer = setTimeout(() => {
+      setNotice('Your break ran past 30 minutes, so the session was ended and saved.')
+      stopRef.current()
+    }, Math.max(0, left))
+    return () => clearTimeout(timer)
+  }, [status, pause.pausedAt])
 
 
   // Arriving from a group study's Start studying: start once, on that click's
@@ -129,13 +173,15 @@ export default function SessionTimer({
   // One click does everything: screen picker, camera, recording, stopwatch.
   // (getDisplayMedia needs this click's user gesture — it can't run on load.)
   // resumeFrom carries on an interrupted session from its original start.
-  async function handleStart(resumeFrom?: number) {
+  async function handleStart(resumeFrom?: number, pausedBefore = 0) {
     setError(null)
     setNotice(null)
     setStatus('starting')
     try {
       await begin()
       setStartedAt(resumeFrom ?? Date.now())
+      setPause({ pausedMs: pausedBefore, pausedAt: null })
+      setStretchFrom(Date.now())
       setInterrupted(null)
       setStatus('running')
     } catch {
@@ -147,13 +193,14 @@ export default function SessionTimer({
   function handleResume() {
     if (!interrupted) return
     setName(interrupted.name === DEFAULT_SESSION_NAME ? '' : interrupted.name)
-    void handleStart(interrupted.startedAt)
+    // A session cut off mid-break: the time since it was cut off is break too.
+    void handleStart(interrupted.startedAt, pausedUntil(pauseOf(interrupted), Date.now()))
   }
 
   // Keeps the time up to the last heartbeat, without a clip.
   async function handleSaveInterrupted() {
     if (!interrupted) return
-    const elapsedMs = interrupted.lastSeen - interrupted.startedAt
+    const elapsedMs = studiedMs(interrupted.startedAt, interrupted.lastSeen, pauseOf(interrupted))
     try {
       await saveSession(
         { startedAt: interrupted.startedAt, task: interrupted.name, goalMs: 0, elapsedMs },
@@ -190,7 +237,7 @@ export default function SessionTimer({
     }))
     let { clip: recorded, problem } = ended
     const { layout } = ended
-    const meta = { startedAt, task, goalMs: 0, elapsedMs: stopAt - startedAt }
+    const meta = { startedAt, task, goalMs: 0, elapsedMs: studiedMs(startedAt, stopAt, pause) }
     let saved = false
     try {
       // The layout travels with the clip: focus analysis reads it.
@@ -229,9 +276,24 @@ export default function SessionTimer({
     setStatus('done')
   }
 
+  function handlePause() {
+    setRecorderPaused(true)
+    setPause((p) => ({ ...p, pausedAt: Date.now() }))
+  }
+
+  function handleUnpause() {
+    setRecorderPaused(false)
+    const now = Date.now()
+    setPause((p) => ({ pausedMs: pausedUntil(p, now), pausedAt: null }))
+    setStretchFrom(now)
+  }
+
   function handleNewSession() {
     setStartedAt(null)
     setStoppedAt(null)
+    setPause(NOT_PAUSED)
+    setStretchFrom(null)
+    setNotice(null)
     setClip(null)
     setError(null)
     setName('')
@@ -279,7 +341,7 @@ export default function SessionTimer({
           }}
           readOnly={status === 'encoding' || status === 'done'}
         />
-        <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} />
+        <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} pause={pause} />
       </div>
 
       <div className="session-actions">
@@ -292,6 +354,17 @@ export default function SessionTimer({
         {status === 'starting' && (
           <button type="button" className="session-start" disabled>
             Starting…
+          </button>
+        )}
+
+        {status === 'running' && !paused && (
+          <button type="button" className="session-stop" onClick={handlePause}>
+            Pause
+          </button>
+        )}
+        {status === 'running' && paused && (
+          <button type="button" className="session-start" onClick={handleUnpause}>
+            Resume
           </button>
         )}
 
@@ -342,11 +415,19 @@ export default function SessionTimer({
         )}
       </div>
 
+      {status === 'running' && paused && (
+        <p className="session-notice" role="status">
+          On a break. Nothing is recorded until you resume.
+        </p>
+      )}
+
       {status === 'idle' && interrupted && (
         <div className="session-recover" role="status">
           <p>
             “{interrupted.name}” was cut off after{' '}
-            {formatStudyTime(interrupted.lastSeen - interrupted.startedAt)}. Its
+            {formatStudyTime(
+              studiedMs(interrupted.startedAt, interrupted.lastSeen, pauseOf(interrupted)),
+            )}. Its
             timelapse couldn't be kept.
           </p>
           <div className="session-recover-actions">
@@ -371,7 +452,7 @@ export default function SessionTimer({
       {room && (
         <RoomPanel
           code={room}
-          studyingSince={status === 'running' ? startedAt : null}
+          studyingSince={status === 'running' && !paused ? stretchFrom : null}
           onLeave={() => onLeaveRoom?.()}
         />
       )}

@@ -3,6 +3,8 @@
 // running session in localStorage, so the next load can offer to resume it or
 // save the time studied. The clip can't be rescued: its frames were in memory.
 
+import type { PauseState } from './elapsed'
+
 const KEY = 'calenduel.activeSession'
 const TAB_KEY = 'calenduel.tabId'
 export const HEARTBEAT_MS = 15_000
@@ -12,6 +14,13 @@ export interface ActiveSession {
   name: string
   lastSeen: number // the last moment the session was known to be running
   tabId: string
+  // Breaks, as in session/elapsed.ts. Missing on records from before pausing.
+  pausedMs?: number
+  pausedAt?: number | null
+}
+
+export function pauseOf(record: ActiveSession): PauseState {
+  return { pausedMs: record.pausedMs ?? 0, pausedAt: record.pausedAt ?? null }
 }
 
 // sessionStorage survives a reload but isn't shared between tabs, which is

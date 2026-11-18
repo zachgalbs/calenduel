@@ -23,3 +23,9 @@
   margin-left: 0.08em;
   color: var(--text);
 }
+
+/* On a break: the numbers fade back until studying resumes. */
+.stopwatch[data-paused='true'] .stopwatch-minutes {
+  opacity: 0.4;
+  transition: opacity 0.2s;
+}

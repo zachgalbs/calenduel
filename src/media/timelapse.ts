@@ -81,6 +81,9 @@ export interface TimelapseResult {
 export interface TimelapseRecorder {
   // End sampling and finalize the live-encoded frames into one video.
   stop: () => Promise<TimelapseResult>
+  // While paused no frames are taken, so the break is left out of the clip.
+  // Frames sit on a virtual timeline, so the clip just runs straight on.
+  setPaused: (paused: boolean) => void
   // Abandon without finalizing — for teardown paths (e.g. the component
   // unmounting mid-recording) that don't need the clip. Safe to call after
   // stop(), and safe to call more than once.
@@ -127,6 +130,7 @@ export function startTimelapse(
   let muxer: Muxer<ArrayBufferTarget> | null = null
   let encoder: VideoEncoder | null = null
   let frameCount = 0
+  let paused = false
   // Choosing a codec is async, so frames are skipped until it settles.
   let settingUp = false
   // The first thing that went wrong. Reported instead of failing silently.
@@ -249,6 +253,7 @@ export function startTimelapse(
   }
 
   let timer: ReturnType<typeof setInterval> | null = setInterval(() => {
+    if (paused) return
     if (!screen.videoWidth) return // canvas size comes from the screen feed
     if (!encoder) {
       if (!settingUp) {
@@ -302,6 +307,9 @@ export function startTimelapse(
   }
 
   return {
+    setPaused(next) {
+      paused = next
+    },
     async stop() {
       // Clears the sampler synchronously (before the first await), so the caller
       // can safely release the streams the moment stop() returns.
