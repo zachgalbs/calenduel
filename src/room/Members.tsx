@@ -3,8 +3,7 @@ import { formatStudyTime } from '../compete/stats'
 import Avatar from '../Avatar'
 import { clock, memberMs } from './useRoom'
 
-// The people in a group study. "Most so far" marks whoever has put in the most
-// time: it's a shared session, but you can still see who's carrying it.
+// The people in a group study, most time first.
 export default function Members({
   members,
   myId,
@@ -17,7 +16,6 @@ export default function Members({
   compact?: boolean
 }) {
   const sorted = [...members].sort((a, b) => memberMs(b, now) - memberMs(a, now))
-  const top = sorted.length > 1 && memberMs(sorted[0], now) > 0 ? sorted[0].id : null
 
   return (
     <ul className={compact ? 'members compact' : 'members'}>
@@ -50,12 +48,7 @@ export default function Members({
                 )}
               </div>
             </div>
-            {(total > 0 || top === m.id) && (
-              <div className="member-total">
-                {total > 0 && formatStudyTime(total)}
-                {top === m.id && <span className="member-top">Most so far</span>}
-              </div>
-            )}
+            {total > 0 && <div className="member-total">{formatStudyTime(total)}</div>}
           </li>
         )
       })}
