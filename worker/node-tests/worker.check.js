@@ -29,6 +29,21 @@ test('preflight permits only the app origin', async () => {
   assert.equal(response.headers.get('Access-Control-Allow-Origin'), 'https://calenduel.com')
 })
 
+test('preflight permits each origin in the list, and nothing else', async () => {
+  const env = { ALLOWED_ORIGIN: 'https://calenduel.com, https://timelapse.study' }
+  const preflight = (origin) => worker.fetch(new Request('https://worker/score', {
+    method: 'OPTIONS', headers: { Origin: origin },
+  }), env)
+  for (const origin of ['https://calenduel.com', 'https://timelapse.study']) {
+    const response = await preflight(origin)
+    assert.equal(response.status, 204)
+    assert.equal(response.headers.get('Access-Control-Allow-Origin'), origin)
+  }
+  const other = await preflight('https://timelapse.study.evil.example')
+  assert.equal(other.status, 403)
+  assert.equal(other.headers.get('Access-Control-Allow-Origin'), null)
+})
+
 test('valid signed requests are bounded, rate limited, and return only decisions', async () => {
   const { publicKey, privateKey } = await generateKeyPair('EdDSA')
   const jwk = { ...await exportJWK(publicKey), kid: 'test', alg: 'EdDSA' }

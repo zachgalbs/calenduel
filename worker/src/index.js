@@ -132,7 +132,8 @@ export function validCompareInput(body) {
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin')
-    const allowed = origin === env.ALLOWED_ORIGIN
+    // A comma-separated list: the app answers on more than one domain.
+    const allowed = !!origin && String(env.ALLOWED_ORIGIN ?? '').split(',').map((o) => o.trim()).includes(origin)
     const headers = {
       'Cache-Control': 'no-store',
       'Vary': 'Origin',
