@@ -13,6 +13,9 @@ const Compete = lazy(() => import('./compete/Compete'))
 const PAGES = ['timer', 'history', 'friends', 'account'] as const
 type Page = (typeof PAGES)[number]
 
+// The tabs the bracket shortcuts step through, left to right.
+const TAB_ORDER: Page[] = ['timer', 'history', 'friends']
+
 function isPage(value: string | null): value is Page {
   return (PAGES as readonly (string | null)[]).includes(value)
 }
@@ -57,6 +60,26 @@ function App() {
   // via onActiveChange.
   const [sessionActive, setSessionActive] = useState(false)
   const [page, setPage] = useState<Page>(initialPage)
+  // Step through the tabs, whenever the nav is showing: Cmd+Shift+[ and ]
+  // (if the browser passes them on; they're its own tab keys) or Ctrl+[ and ]
+  // (which it doesn't use). A modifier, so it works mid-typing too.
+  useEffect(() => {
+    if (sessionActive) return
+    const onKey = (e: KeyboardEvent) => {
+      const step = e.code === 'BracketLeft' ? -1 : e.code === 'BracketRight' ? 1 : 0
+      if (step === 0 || e.altKey) return
+      const cmd = e.metaKey && e.shiftKey && !e.ctrlKey
+      const ctrl = e.ctrlKey && !e.metaKey && !e.shiftKey
+      if (!cmd && !ctrl) return
+      e.preventDefault()
+      setPage((p) => {
+        const i = TAB_ORDER.indexOf(p)
+        return TAB_ORDER[(Math.max(0, i) + step + TAB_ORDER.length) % TAB_ORDER.length]
+      })
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [sessionActive])
   const [historyKey, setHistoryKey] = useState(0)
   // The study room this tab is in, or is about to join (see room/useRoom.ts).
   // Every signed-in session has one; SessionTimer creates it on Start.
