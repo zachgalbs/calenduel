@@ -36,6 +36,30 @@ const RESUME_WINDOW_MS = 10 * 60_000
 // screen share shouldn't sit open all afternoon. The study time is saved.
 const PAUSE_LIMIT_MS = 30 * 60_000
 
+// While a session runs, the controls step back once the mouse and keyboard
+// have been still this long, and come back at the next touch.
+const STILL_MS = 3_000
+
+function useStill(active: boolean): boolean {
+  const [still, setStill] = useState(false)
+  useEffect(() => {
+    if (!active) return
+    let timer = setTimeout(() => setStill(true), STILL_MS)
+    const wake = () => {
+      setStill(false)
+      clearTimeout(timer)
+      timer = setTimeout(() => setStill(true), STILL_MS)
+    }
+    const events = ['pointermove', 'pointerdown', 'keydown', 'focusin'] as const
+    for (const e of events) window.addEventListener(e, wake)
+    return () => {
+      clearTimeout(timer)
+      for (const e of events) window.removeEventListener(e, wake)
+    }
+  }, [active])
+  return active && still
+}
+
 // Error names like QuotaExceededError are the useful part when someone sends a
 // screenshot of a failure.
 function describe(e: unknown): string {
@@ -77,6 +101,7 @@ export default function SessionTimer({
   // that room is only an invitation.
   const [joinedRoom, setJoinedRoom] = useState<string | null>(null)
   const inRoom = room !== null && joinedRoom === room
+  const still = useStill(status === 'running')
   const [linkCopied, setLinkCopied] = useState(false)
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -369,6 +394,10 @@ export default function SessionTimer({
     setStretchFrom(now)
   }
 
+  // Your lamp on the table is the pause switch.
+  const lampSwitch = status === 'running' ? (paused ? handleUnpause : handlePause) : undefined
+  const lampLabel = paused ? 'Resume' : 'Take a break'
+
   function handleNewSession() {
     setStartedAt(null)
     setStoppedAt(null)
@@ -404,7 +433,22 @@ export default function SessionTimer({
             muted
           />
           {/* Below the face: you look down at the iPad. */}
-          {ipadStream && <StreamPreview stream={ipadStream} className="session-ipad" />}
+          {ipadStream && (
+            <div className="session-ipad-wrap">
+              <StreamPreview stream={ipadStream} className="session-ipad" />
+              <button
+                type="button"
+                className="session-ipad-remove"
+                aria-label="Remove iPad"
+                title="Remove iPad"
+                onClick={removeIpad}
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
+                  <path d="M18 6 6 18M6 6l12 12" />
+                </svg>
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -425,7 +469,7 @@ export default function SessionTimer({
         <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} pause={pause} />
       </div>
 
-      <div className="session-actions">
+      <div className="session-actions" data-still={still}>
         {status === 'idle' && (
           <button type="button" className="session-start" onClick={() => handleStart()}>
             Start
@@ -435,17 +479,6 @@ export default function SessionTimer({
         {status === 'starting' && (
           <button type="button" className="session-start" disabled>
             Starting…
-          </button>
-        )}
-
-        {status === 'running' && !paused && (
-          <button type="button" className="session-stop" onClick={handlePause}>
-            Pause
-          </button>
-        )}
-        {status === 'running' && paused && (
-          <button type="button" className="session-start" onClick={handleUnpause}>
-            Resume
           </button>
         )}
 
@@ -460,11 +493,6 @@ export default function SessionTimer({
         {status === 'running' && !ipadStream && (
           <button type="button" className="session-link" onClick={() => void addIpad()}>
             Add iPad
-          </button>
-        )}
-        {status === 'running' && ipadStream && (
-          <button type="button" className="session-link" onClick={removeIpad}>
-            Remove iPad
           </button>
         )}
 
@@ -503,12 +531,6 @@ export default function SessionTimer({
         )}
       </div>
 
-      {status === 'running' && paused && (
-        <p className="session-notice" role="status">
-          On a break. Nothing is recorded until you resume.
-        </p>
-      )}
-
       {status === 'idle' && room && !inRoom && (
         <RoomInvite code={room} onDismiss={() => onRoomChange(null)} />
       )}
@@ -545,9 +567,13 @@ export default function SessionTimer({
         <RoomPanel
           code={room}
           studyingSince={status === 'running' && !paused ? stretchFrom : null}
+          onLamp={lampSwitch}
+          lampLabel={lampLabel}
         />
       ) : (
-        status === 'running' && <SoloTable studying={!paused} />
+        status === 'running' && (
+          <SoloTable studying={!paused} onLamp={lampSwitch} lampLabel={lampLabel} />
+        )
       )}
     </section>
   )

@@ -5,7 +5,8 @@ import './Room.css'
 // Your session's table, beside the timer. Alone it's a one-person desk; each
 // person who joins walks in and takes a seat, the table stretches to fit, and
 // the view pulls back. A lamp in front of each seat is lit while that person
-// studies and dims on a break. No words: the room explains itself.
+// studies and dims on a break. Your own lamp is the pause switch: click it to
+// take a break, click again to carry on. No words: the room explains itself.
 
 export interface TablePerson {
   id: string
@@ -48,7 +49,16 @@ function place(i: number): { col: number; top: boolean } {
   return { col: Math.floor(i / 2), top: i % 2 === 0 }
 }
 
-export default function StudyTable({ people }: { people: TablePerson[] }) {
+export default function StudyTable({
+  people,
+  onLamp,
+  lampLabel,
+}: {
+  people: TablePerson[]
+  // Your lamp's click (id 'me'), while a session runs: pause or resume.
+  onLamp?: () => void
+  lampLabel?: string
+}) {
   const key = people.map((p) => `${p.id}:${p.lit ? 1 : 0}:${p.avatar ?? ''}`).join('|')
   const [seen, setSeen] = useState(key)
   // Whoever is already here on first render is simply seated, no entrance.
@@ -104,7 +114,7 @@ export default function StudyTable({ people }: { people: TablePerson[] }) {
     .join(', ')
 
   return (
-    <div className="study-table" role="img" aria-label={`At your table: ${label}`}>
+    <div className="study-table" role="group" aria-label={`At your table: ${label}`}>
       <div className="study-world" style={{ transform: `scale(${scale}) translateY(${shiftY}px)` }}>
         <div
           className="study-surface"
@@ -120,11 +130,24 @@ export default function StudyTable({ people }: { people: TablePerson[] }) {
           const lampY = top ? tTop + 12 : tTop + th - 24
           return (
             <div key={s.id}>
-              <span
-                className="study-lamp"
-                data-lit={s.lit && !away}
-                style={{ transform: `translate(${x - 6}px, ${lampY}px)`, opacity: away ? 0 : 1 }}
-              />
+              {s.id === 'me' && onLamp ? (
+                <button
+                  type="button"
+                  className="study-lamp-switch"
+                  aria-label={lampLabel}
+                  title={lampLabel}
+                  onClick={onLamp}
+                  style={{ transform: `translate(${x - 16}px, ${lampY - 10}px)` }}
+                >
+                  <span className="study-lamp" data-lit={s.lit} />
+                </button>
+              ) : (
+                <span
+                  className="study-lamp"
+                  data-lit={s.lit && !away}
+                  style={{ transform: `translate(${x - 6}px, ${lampY}px)`, opacity: away ? 0 : 1 }}
+                />
+              )}
               <span
                 className="study-seat"
                 title={s.name}

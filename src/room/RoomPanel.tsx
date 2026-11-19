@@ -27,9 +27,23 @@ function useMe(): { id: string | null; name: string; avatar: string | null } {
 }
 
 // Studying with nobody's room to sit in: a one-person desk.
-export function SoloTable({ studying }: { studying: boolean }) {
+export function SoloTable({
+  studying,
+  onLamp,
+  lampLabel,
+}: {
+  studying: boolean
+  onLamp?: () => void
+  lampLabel?: string
+}) {
   const me = useMe()
-  return <StudyTable people={[{ id: 'me', name: me.name, avatar: me.avatar, lit: studying }]} />
+  return (
+    <StudyTable
+      people={[{ id: 'me', name: me.name, avatar: me.avatar, lit: studying }]}
+      onLamp={onLamp}
+      lampLabel={lampLabel}
+    />
+  )
 }
 
 // The study room, as a table: everyone here has a seat, lit while they study.
@@ -37,9 +51,13 @@ export function SoloTable({ studying }: { studying: boolean }) {
 export default function RoomPanel({
   code,
   studyingSince,
+  onLamp,
+  lampLabel,
 }: {
   code: string
   studyingSince: number | null
+  onLamp?: () => void
+  lampLabel?: string
 }) {
   const { state, beatFailing } = useRoom(code, studyingSince)
   const me = useMe()
@@ -54,7 +72,7 @@ export default function RoomPanel({
 
   return (
     <>
-      <StudyTable people={people} />
+      <StudyTable people={people} onLamp={onLamp} lampLabel={lampLabel} />
       {beatFailing && (
         <p className="room-error" role="alert">
           Can't reach the room, so the others may not see you.

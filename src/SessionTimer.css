@@ -36,7 +36,12 @@
 
 .session[data-focus='true'] .session-name {
   width: 22rem;
-  font-size: 17px;
+  font-size: 15px;
+  color: var(--text);
+}
+
+.session[data-focus='true'] .session-name:focus {
+  color: var(--text-h);
 }
 
 /* ── Name + stopwatch ──────────────────────────────────────────────── */
@@ -123,6 +128,34 @@
   display: block;
 }
 
+/* Remove the iPad from the frame: shown when you hover its preview. */
+.session-ipad-wrap {
+  position: relative;
+}
+
+.session-ipad-remove {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.session-ipad-wrap:hover .session-ipad-remove,
+.session-ipad-remove:focus-visible {
+  opacity: 1;
+}
+
 /* ── Buttons ───────────────────────────────────────────────────────── */
 .session-actions {
   display: flex;
@@ -130,6 +163,13 @@
   justify-content: center;
   align-items: center;
   gap: 0.75rem;
+  transition: opacity 0.8s ease;
+}
+
+/* Still for a few seconds mid-session: the controls step back. Any touch, or
+   tabbing to one, brings them back. */
+.session-actions[data-still='true']:not(:focus-within) {
+  opacity: 0;
 }
 
 .session button {
