@@ -54,12 +54,12 @@ describe('bookSeed', () => {
 })
 
 describe('splitShelf', () => {
-  it('lays subjects under 5% of all time flat in the pile', () => {
+  it('lays subjects under 10% of all time flat in the pile', () => {
     const books = shelfBooks([
       s('a', 1, 600, 'Writing'),
       s('b', 2, 380, 'Math'),
-      s('c', 3, 40, 'Spanish'), // 40 of 1040: under 5%
-      s('d', 4, 20), // unsorted, under 5% too
+      s('c', 3, 90, 'Spanish'), // 90 of 1090: under 10%
+      s('d', 4, 20), // unsorted, under 10% too
     ])
     const { standing, pile } = splitShelf(books)
     expect(standing.map((b) => b.name)).toEqual(['Writing', 'Math'])

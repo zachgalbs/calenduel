@@ -52,9 +52,9 @@ export function bookSeed(key: string): number {
   return h >>> 0
 }
 
-// Subjects under this share of all your time don't get a book: they lie flat
+// Subjects under this share (10%) of all your time don't get a book: they lie flat
 // in a small pile at the end of the shelf, so the books are what you study.
-export const BOOK_SHARE = 0.05
+export const BOOK_SHARE = 0.1
 export const PILE = '__pile__'
 
 export function splitShelf(books: Book[], share = BOOK_SHARE): { standing: Book[]; pile: Book[] } {
