@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   addFriend,
-  createRoom,
   ensureProfile,
   fetchDailyTotals,
   fetchFriendSessions,
   FRIEND_SESSION_LIMIT,
   isSignedIn,
+  joinableRooms,
   listFriends,
   liveTimes,
   removeFriend,
@@ -356,64 +356,14 @@ function InviteForm({
   )
 }
 
-// Top of Compete: study together, live. Starting makes a group study and opens
-// its lobby, where the link is waiting to be shared.
-function GroupStudy({
-  room,
-  onOpenRoom,
-}: {
-  room: string | null
-  onOpenRoom: (code: string) => void
-}) {
-  const [creating, setCreating] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-
-  async function handleStart() {
-    setError(null)
-    setCreating(true)
-    try {
-      onOpenRoom(await createRoom())
-    } catch (err) {
-      setError(errorText(err))
-      setCreating(false)
-    }
-  }
-
-  return (
-    <section className="group-study">
-      <div className="group-study-text">
-        <h2>Group study</h2>
-        <p className="compete-note">
-          {room
-            ? 'You’re in a group study.'
-            : 'Study together in real time. Share a link, and see who’s studying and for how long.'}
-        </p>
-      </div>
-      {room ? (
-        <button type="button" className="compete-btn primary" onClick={() => onOpenRoom(room)}>
-          Back to group study
-        </button>
-      ) : (
-        <button
-          type="button"
-          className="compete-btn primary"
-          onClick={handleStart}
-          disabled={creating}
-        >
-          {creating ? 'Starting...' : 'Start group study'}
-        </button>
-      )}
-      {error && <p className="compete-error" role="alert">{error}</p>}
-    </section>
-  )
-}
-
 export default function Compete({
   room = null,
-  onOpenRoom = () => {},
+  onJoin = () => {},
 }: {
+  // This tab's study room, so there's no Join button for a room you're in.
   room?: string | null
-  onOpenRoom?: (code: string) => void
+  // Join a friend's room and start studying in it, on this click.
+  onJoin?: (code: string) => void
 }) {
   // null = still finding out.
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
@@ -445,6 +395,8 @@ export default function Compete({
     setNow(Date.now())
     return ended
   }, [])
+  // Friends in a session, and the room to join each one in.
+  const [rooms, setRooms] = useState<Map<string, string>>(() => new Map())
 
   const refresh = useCallback(async () => {
     try {
@@ -514,6 +466,28 @@ export default function Compete({
       document.removeEventListener('visibilitychange', read)
     }
   }, [signedInNow, fetchLive, showLive, refresh])
+
+  // The Join buttons, on the same rhythm. A failed read keeps the last answer.
+  useEffect(() => {
+    if (!signedInNow) return
+    let closed = false
+    const read = () => {
+      if (document.visibilityState !== 'visible') return
+      joinableRooms()
+        .then((r) => {
+          if (!closed) setRooms(r)
+        })
+        .catch((err) => console.error('study rooms failed', err))
+    }
+    read()
+    const timer = setInterval(read, LIVE_MS)
+    document.addEventListener('visibilitychange', read)
+    return () => {
+      closed = true
+      clearInterval(timer)
+      document.removeEventListener('visibilitychange', read)
+    }
+  }, [signedInNow])
 
   const ticking = live.some((s) => s.frozenAt === null)
   useEffect(() => {
@@ -588,8 +562,6 @@ export default function Compete({
 
       {board && (
         <>
-          <GroupStudy room={room} onOpenRoom={onOpenRoom} />
-
           {board.failedUploads > 0 && (
             <p className="compete-error" role="alert">
               {plural(board.failedUploads, 'session')} couldn't be uploaded and
@@ -623,6 +595,15 @@ export default function Compete({
                   <span className="standing-name">
                     {s.id === board.profile.id ? 'You' : s.name}
                     <LiveDot on={studying.has(s.id)} />
+                    {rooms.has(s.id) && rooms.get(s.id) !== room && (
+                      <button
+                        type="button"
+                        className="standing-join"
+                        onClick={() => onJoin(rooms.get(s.id)!)}
+                      >
+                        Join
+                      </button>
+                    )}
                   </span>
                   <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
                   <span

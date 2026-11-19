@@ -1,54 +1,7 @@
 /* ─────────────────────────────────────────────────────────────────
-   Group study — the lobby (its own page) and the panel beside the
-   timer. Same editorial column as Compete; the room is one framed
-   surface, with green reserved for "studying right now".
+   Study rooms — the panel beside the timer, shown once someone else
+   is in your room. Green is reserved for "studying right now".
    ───────────────────────────────────────────────────────────────── */
-
-.room-page {
-  width: 100%;
-  max-width: 38rem;
-  margin: 0 auto;
-  padding: clamp(4.5rem, 13vh, 9rem) 1.5rem 6rem;
-}
-
-.room {
-  padding: 1.75rem 1.75rem 1.5rem;
-  border: 1px solid var(--border);
-  border-radius: 16px;
-  background: var(--bg-elev);
-}
-
-.room-head {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 0.5rem 1rem;
-  margin-bottom: 1.5rem;
-}
-
-.room-title {
-  margin: 0;
-  font-size: clamp(1.9rem, 5vw, 2.4rem);
-}
-
-.room-sub {
-  margin: 0.25rem 0 0;
-  font-size: 13.5px;
-  color: var(--text);
-}
-
-.room-lead {
-  font-size: 15.5px;
-  color: var(--text-h);
-  margin: 1.25rem 0 0;
-}
-
-.room-note {
-  font-size: 13px;
-  color: var(--text);
-  margin: 0.75rem 0 0;
-}
 
 .room-error {
   font-size: 13px;
@@ -81,42 +34,6 @@
 .room-live.on .room-live-dot {
   background: var(--live);
   animation: room-pulse 2.4s ease-in-out infinite;
-}
-
-/* ── Invite ───────────────────────────────────────────────────── */
-
-.room-invite {
-  margin-bottom: 1.5rem;
-  padding: 0.9rem 1rem 1rem;
-  border-radius: 10px;
-  background: var(--accent-bg);
-  border: 1px solid var(--accent-border);
-}
-
-.room-invite-label {
-  margin: 0 0 0.55rem;
-  font-size: 12.5px;
-  color: var(--text);
-}
-
-.room-invite-row {
-  display: flex;
-  gap: 0.5rem;
-  align-items: stretch;
-}
-
-.room-invite-link {
-  flex: 1;
-  min-width: 0;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--text-h);
-  padding: 6px 10px;
-  border-radius: 6px;
-  background: var(--bg);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 /* ── Members ──────────────────────────────────────────────────── */
@@ -188,15 +105,6 @@
   color: var(--text-mute);
 }
 
-.member-host {
-  margin-left: 0.4rem;
-  font-size: 10.5px;
-  font-weight: 500;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: var(--text-mute);
-}
-
 .member-status {
   font-size: 12.5px;
   color: var(--text-mute);
@@ -264,44 +172,6 @@
   gap: 0.2rem;
 }
 
-/* ── Actions ──────────────────────────────────────────────────── */
-
-.room-cta {
-  margin-top: 1.75rem;
-  text-align: center;
-}
-
-.room-cta .room-note {
-  max-width: 26rem;
-  margin-left: auto;
-  margin-right: auto;
-}
-
-.room-waiting {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.55rem;
-  margin: 0;
-  font-size: 14px;
-  color: var(--text-h);
-}
-
-.room-waiting-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  background: var(--accent);
-  animation: room-breathe 1.8s ease-in-out infinite;
-}
-
-.room-foot {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 0.5rem 1.25rem;
-  margin-top: 1.5rem;
-}
-
 /* ── Panel beside the timer ───────────────────────────────────── */
 
 .room-panel {
@@ -346,45 +216,6 @@
 
 /* ── Controls ─────────────────────────────────────────────────── */
 
-.room-btn {
-  font: inherit;
-  font-size: 12.5px;
-  font-weight: 500;
-  color: var(--text-h);
-  background: transparent;
-  border: 1px solid var(--border-strong);
-  border-radius: 6px;
-  padding: 6px 13px;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: border-color 0.15s ease, opacity 0.15s ease;
-}
-
-.room-btn:hover:not(:disabled) {
-  border-color: var(--text);
-}
-
-.room-btn.primary {
-  color: var(--bg);
-  background: var(--text-h);
-  border-color: var(--text-h);
-}
-
-.room-btn.primary:hover:not(:disabled) {
-  opacity: 0.88;
-}
-
-.room-btn.big {
-  font-size: 15px;
-  padding: 11px 28px;
-  border-radius: 999px;
-}
-
-.room-btn:disabled {
-  opacity: 0.5;
-  cursor: default;
-}
-
 .room-link {
   font: inherit;
   font-size: 12.5px;
@@ -407,28 +238,18 @@
   50% { box-shadow: 0 0 0 5px transparent; }
 }
 
-@keyframes room-breathe {
-  0%, 100% { opacity: 0.35; }
-  50% { opacity: 1; }
-}
-
 @keyframes room-arrive {
   from { opacity: 0; transform: translateY(4px); }
 }
 
 @media (prefers-reduced-motion: reduce) {
   .room-live.on .room-live-dot,
-  .room-waiting-dot,
   .member {
     animation: none;
   }
 }
 
 @media (max-width: 30rem) {
-  .room {
-    padding: 1.25rem 1rem 1.1rem;
-  }
-
   .members:not(.compact) {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }

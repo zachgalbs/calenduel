@@ -1,6 +1,6 @@
 import { Component, type ReactNode } from 'react'
 
-// Around the pages that load on demand (Compete, group study, parts of
+// Around the pages that load on demand (Compete and parts of
 // Account). A deploy replaces those files, so a tab opened before it can't
 // fetch them any more: without this, the whole app goes blank. With it, only
 // that page asks for a reload. It never reloads by itself, because a reload in

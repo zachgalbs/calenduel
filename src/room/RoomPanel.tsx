@@ -3,8 +3,9 @@ import Members from './Members'
 import { useNow, useRoom } from './useRoom'
 import './Room.css'
 
-// The group study, beside the timer: who's studying and for how long. Also what
-// keeps you present in it, with your running session's start time.
+// The study room, beside the timer: who's studying and for how long. Also what
+// keeps you present in it, with your current stretch of studying. Every
+// session has a room, so it only shows once someone else is in yours.
 export default function RoomPanel({
   code,
   studyingSince,
@@ -32,23 +33,13 @@ export default function RoomPanel({
     }
   }, [])
 
-  if (!state) return null
+  if (!state || !myId || !state.members.some((m) => m.id !== myId)) return null
   const studying = state.members.filter((m) => m.liveSince !== null).length
 
-  async function handleLeave() {
-    try {
-      const { leaveRoom } = await import('../compete/api')
-      await leaveRoom(code)
-    } catch {
-      // Still leave here; the room shows you as away soon after.
-    }
-    onLeave()
-  }
-
   return (
-    <aside className="room-panel" aria-label="Group study">
+    <aside className="room-panel" aria-label="Studying together">
       <header className="room-panel-head">
-        <span className="room-panel-title">Group study</span>
+        <span className="room-panel-title">Studying together</span>
         <span className={studying > 0 ? 'room-live on' : 'room-live'}>
           <span className="room-live-dot" aria-hidden="true" />
           {studying > 0 ? `${studying} studying` : 'Nobody studying yet'}
@@ -57,13 +48,13 @@ export default function RoomPanel({
       <Members members={state.members} myId={myId} now={now} compact />
       {beatFailing && (
         <p className="room-error" role="alert">
-          Can't reach the group study, so the others may not see you studying.
+          Can't reach the study room, so the others may not see you studying.
         </p>
       )}
       {studyingSince === null && (
         <footer className="room-panel-foot">
-          <button type="button" className="room-link" onClick={handleLeave}>
-            Leave group study
+          <button type="button" className="room-link" onClick={onLeave}>
+            Study alone next time
           </button>
         </footer>
       )}

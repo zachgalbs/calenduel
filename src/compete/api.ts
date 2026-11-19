@@ -56,7 +56,7 @@ export async function focusToken(): Promise<string | null> {
 // Leaves the page for Google, then returns to the tab it left from (Compete
 // unless told otherwise). Anything already in the URL, like an invite code,
 // survives the round trip.
-export async function signIn(tab: 'compete' | 'room' = 'compete'): Promise<void> {
+export async function signIn(tab: 'compete' | 'timer' = 'compete'): Promise<void> {
   const params = new URLSearchParams(window.location.search)
   params.set('tab', tab)
   const { error } = await neon.auth.signIn.social({
@@ -128,7 +128,8 @@ export async function addFriend(code: string): Promise<string> {
   return data as string
 }
 
-// Group study (db/migrations/010): a session studied together, live.
+// Study rooms (db/migrations/010, 012): every signed-in session is in one, and
+// friends can join it.
 export interface RoomPreview {
   hostName: string
   members: number
@@ -142,9 +143,9 @@ export interface RoomMember {
   name: string
   avatar: string | null
   isHost: boolean
-  here: boolean // has the lobby or a session open
+  here: boolean // has a session open in the room
   liveSince: number | null // start of a session running now
-  bankedMs: number // time already studied in this group study
+  bankedMs: number // time already studied in this room
 }
 
 export interface RoomState {
@@ -206,11 +207,6 @@ export async function roomState(code: string): Promise<RoomState> {
   }
 }
 
-export async function startRoom(code: string): Promise<void> {
-  const { error } = await neon.rpc('start_room', { room_code: code })
-  if (error) fail(error)
-}
-
 // "I'm here", with the start of my running session, or null between sessions.
 export async function roomBeat(code: string, studyingSince: number | null): Promise<void> {
   const { error } = await neon.rpc('room_beat', {
@@ -225,22 +221,26 @@ export async function leaveRoom(code: string): Promise<void> {
   if (error) fail(error)
 }
 
-// "I'm in a session" (see db/migrations/012), or null: not anymore. Friends
-// see the time count up on Compete, and the green dot while it isn't frozen.
+// "I'm in a session" (see db/migrations/012, 013), or null: not anymore.
+// Friends see the time count up on Compete, the green dot while it isn't
+// frozen, and a Join button while it has a room.
 export interface LiveBeat {
   since: number
   frozenAt: number | null
   day: string
   startedAt: number
+  room: string | null
 }
 
 export async function liveBeat(beat: LiveBeat | null): Promise<void> {
   const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString())
+  // All five, always: the Data API picks the overload by the names sent.
   const { error } = await neon.rpc('live_beat', {
     studying: iso(beat?.since ?? null),
     frozen: iso(beat?.frozenAt ?? null),
     on_day: beat?.day ?? null,
     started: iso(beat?.startedAt ?? null),
+    room_code: beat?.room ?? null,
   })
   if (error) fail(error)
 }
@@ -262,6 +262,13 @@ export async function liveTimes(): Promise<LiveSession[]> {
     frozenAt: r.frozen_at === null ? null : Date.parse(r.frozen_at),
     day: r.day,
   }))
+}
+
+// Friends in a session right now, and the study room to join each one in.
+export async function joinableRooms(): Promise<Map<string, string>> {
+  const { data, error } = await neon.rpc('joinable_rooms')
+  if (error) fail(error)
+  return new Map((data as { user_id: string; room_code: string }[]).map((r) => [r.user_id, r.room_code]))
 }
 
 export async function removeFriend(friendId: string): Promise<void> {

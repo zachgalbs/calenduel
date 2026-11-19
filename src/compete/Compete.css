@@ -341,38 +341,6 @@
   color: var(--text-h);
 }
 
-/* ── Group study (top of the page) ────────────────────────────── */
-
-.group-study {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  justify-content: space-between;
-  gap: 1rem 1.5rem;
-  margin-bottom: 3.5rem;
-  padding: 1.25rem 1.4rem;
-  border: 1px solid var(--live-border);
-  background: var(--live-bg);
-  border-radius: 14px;
-}
-
-.group-study-text {
-  flex: 1 1 16rem;
-}
-
-.group-study h2 {
-  margin: 0;
-}
-
-.group-study .compete-note {
-  margin-top: 0.3rem;
-}
-
-.group-study .compete-error {
-  flex-basis: 100%;
-  margin: 0;
-}
-
 /* Studying right now. */
 .live-dot {
   display: inline-block;
@@ -384,4 +352,29 @@
   background: #22c55e;
   box-shadow: 0 0 0 2px color-mix(in srgb, #22c55e 25%, transparent);
   vertical-align: middle;
+}
+
+/* Beside a friend's green dot: study in their room, on this click. */
+.standing-join {
+  margin-left: 8px;
+  font: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: var(--live);
+  background: var(--live-bg);
+  border: 1px solid var(--live-border);
+  border-radius: 999px;
+  padding: 1px 9px;
+  cursor: pointer;
+  vertical-align: middle;
+}
+
+.standing-join:hover {
+  filter: brightness(1.08);
+}
+
+.standing-join:focus-visible {
+  outline: 2px solid var(--live);
+  outline-offset: 2px;
 }

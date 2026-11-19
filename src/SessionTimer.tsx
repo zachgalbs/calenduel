@@ -15,6 +15,8 @@ import {
   type ActiveSession,
 } from './session/activeSession'
 import RoomPanel from './room/RoomPanel'
+import RoomInvite from './room/RoomInvite'
+import { roomLink } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
 import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
 
@@ -43,21 +45,19 @@ function describe(e: unknown): string {
 
 export default function SessionTimer({
   room = null,
-  roomJoinedAt = null,
+  onRoomChange,
   autoStart = false,
   onAutoStarted,
-  onLeaveRoom,
   onActiveChange,
   onSessionSaved,
 }: {
-  // The group study this session belongs to, shown beside the timer.
+  // The study room: the one this tab's sessions are in, or one a link or a
+  // Join click brought us to. Kept in the URL, so that URL is the invite.
   room?: string | null
-  // Set when this running session joined the room partway through.
-  roomJoinedAt?: number | null
-  // Start straight away: the lobby's Start studying click brought us here.
+  onRoomChange: (code: string | null) => void
+  // Start straight away: Compete's Join click brought us here.
   autoStart?: boolean
   onAutoStarted?: () => void
-  onLeaveRoom?: () => void
   onActiveChange: (active: boolean) => void
   // May return the upload, so friends keep seeing the time until it lands.
   onSessionSaved?: () => Promise<unknown> | void
@@ -70,9 +70,14 @@ export default function SessionTimer({
   const [pause, setPause] = useState<PauseState>(NOT_PAUSED)
   const paused = pause.pausedAt !== null
   // When the current stretch of studying began (the start, or the last resume).
-  // That's what the group study gets: it banks each stretch when it ends, so
+  // That's what the study room gets: it banks each stretch when it ends, so
   // sending the session's start again after a break would count time twice.
   const [stretchFrom, setStretchFrom] = useState<number | null>(null)
+  // The room this tab has actually joined or created. Until it matches `room`,
+  // that room is only an invitation.
+  const [joinedRoom, setJoinedRoom] = useState<string | null>(null)
+  const inRoom = room !== null && joinedRoom === room
+  const [linkCopied, setLinkCopied] = useState(false)
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Optional, and never required to start: Start stays one click. It can be
@@ -115,7 +120,8 @@ export default function SessionTimer({
 
   // Friends see this session's time count up on Compete, and the green dot
   // while not on a break. After Stop the time stays up, frozen, until the
-  // upload lands, so it never drops out of their totals in between.
+  // upload lands, so it never drops out of their totals in between. The room
+  // gives them a Join button, a break included; not once the session's over.
   const live =
     startedAt !== null &&
     (status === 'running' ||
@@ -127,6 +133,7 @@ export default function SessionTimer({
           ...liveSpan(startedAt, pause, status === 'running' ? null : stoppedAt),
           day: localDay(startedAt), // the day the upload is filed under
           startedAt, // lets the database drop this once the upload exists
+          room: status === 'running' && inRoom ? room : null,
         }
       : null,
   )
@@ -170,7 +177,7 @@ export default function SessionTimer({
   }, [status, pause.pausedAt])
 
 
-  // Arriving from a group study's Start studying: start once, on that click's
+  // Arriving from a Join click on Compete: start once, on that click's
   // gesture (a browser counts a click as one for a few seconds). If it has
   // lapsed, the picker refuses and the Start button is right here.
   const autoStartedRef = useRef(false)
@@ -207,6 +214,70 @@ export default function SessionTimer({
     } catch {
       setError('Screen and camera access are needed to record your session.')
       setStatus('idle')
+      return
+    }
+    enterRoom()
+  }
+
+  // Every signed-in session is in a study room, so friends can always join.
+  // In the background: the session is already running, and a room that can't
+  // be reached just means studying alone.
+  //   - A room from a link or a Join click: join it.
+  //   - This tab's room from an earlier session: stay only if someone else is
+  //     still studying in it. Otherwise it's over, and a fresh one starts.
+  //   - No room: make one.
+  function enterRoom() {
+    const current = room
+    const leftover = current !== null && current === joinedRoom
+    void (async () => {
+      const api = await import('./compete/api')
+      if (!(await api.isSignedIn())) {
+        if (current) onRoomChange(null)
+        return
+      }
+      if (current) {
+        try {
+          let stay = true
+          if (leftover) {
+            const [me, state] = await Promise.all([api.ensureProfile(), api.roomState(current)])
+            stay = state.members.some((m) => m.id !== me.id && m.liveSince !== null)
+          }
+          if (stay) {
+            await api.joinRoom(current) // idempotent; also friends you with everyone in it
+            setJoinedRoom(current)
+            return
+          }
+        } catch (err) {
+          console.error('joining the study room failed; making a new one', err)
+        }
+      }
+      const code = await api.createRoom()
+      onRoomChange(code)
+      setJoinedRoom(code)
+    })().catch((err) => console.error('study room failed', err))
+  }
+
+  async function handleCopyLink() {
+    if (!room) return
+    try {
+      await navigator.clipboard.writeText(roomLink(room))
+      setLinkCopied(true)
+      setTimeout(() => setLinkCopied(false), 2000)
+    } catch {
+      setNotice(`Couldn't copy it. The link is ${roomLink(room)}`)
+    }
+  }
+
+  async function handleLeaveRoom() {
+    const code = room
+    onRoomChange(null)
+    setJoinedRoom(null)
+    if (!code) return
+    try {
+      const { leaveRoom } = await import('./compete/api')
+      await leaveRoom(code)
+    } catch {
+      // Gone here already; the room shows you as away soon after.
     }
   }
 
@@ -410,6 +481,13 @@ export default function SessionTimer({
           </button>
         )}
 
+        {/* The page's own URL works too; this is for when the nav is hidden. */}
+        {status === 'running' && inRoom && (
+          <button type="button" className="session-link" onClick={handleCopyLink}>
+            {linkCopied ? 'Link copied' : 'Copy invite link'}
+          </button>
+        )}
+
         {status === 'encoding' && (
           <button type="button" className="session-stop" disabled>
             Saving…
@@ -444,6 +522,10 @@ export default function SessionTimer({
         </p>
       )}
 
+      {status === 'idle' && room && !inRoom && (
+        <RoomInvite code={room} onDismiss={() => onRoomChange(null)} />
+      )}
+
       {status === 'idle' && interrupted && (
         <div className="session-recover" role="status">
           <p>
@@ -472,15 +554,11 @@ export default function SessionTimer({
       {notice && <p className="session-notice" role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
 
-      {room && (
+      {inRoom && room && (
         <RoomPanel
           code={room}
-          studyingSince={
-            status === 'running' && !paused && stretchFrom !== null
-              ? Math.max(stretchFrom, roomJoinedAt ?? 0)
-              : null
-          }
-          onLeave={() => onLeaveRoom?.()}
+          studyingSince={status === 'running' && !paused ? stretchFrom : null}
+          onLeave={handleLeaveRoom}
         />
       )}
     </section>

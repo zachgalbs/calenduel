@@ -3,7 +3,7 @@ import { formatStudyTime } from '../compete/stats'
 import Avatar from '../Avatar'
 import { clock, memberMs } from './useRoom'
 
-// The people in a group study, most time first.
+// The people in a study room, most time first.
 export default function Members({
   members,
   myId,
@@ -32,7 +32,6 @@ export default function Members({
               <div className="member-name">
                 {m.name}
                 {m.id === myId && <span className="member-you"> (you)</span>}
-                {m.isHost && !compact && <span className="member-host">host</span>}
               </div>
               <div className="member-status">
                 {live ? (

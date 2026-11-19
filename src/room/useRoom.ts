@@ -1,4 +1,4 @@
-// The group study you're in, and a live view of it.
+// The study room you're in, and a live view of it.
 //
 // The room's code is kept in sessionStorage (this tab only) and in the URL as
 // ?room=CODE, so a refresh stays in the room and the link is the invitation.
@@ -60,11 +60,7 @@ export function useNow(active: boolean): number {
 // Keeps you present in the room (with your running session's start time, or
 // null) and polls who else is there. Network failures are retried quietly; a
 // lasting error is reported.
-//
-// present = false only watches. Presence is per person, not per tab, so a tab
-// must stay quiet while another tab's session speaks for you: two tabs saying
-// different things would keep reopening your stretch and count it twice.
-export function useRoom(code: string, studyingSince: number | null, present = true) {
+export function useRoom(code: string, studyingSince: number | null) {
   const [state, setState] = useState<RoomState | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Two beats in a row failed: the others can't see you. Said out loud, since
@@ -79,7 +75,7 @@ export function useRoom(code: string, studyingSince: number | null, present = tr
       setState(await roomState(code))
       setError(null)
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Lost touch with the group study.')
+      setError(err instanceof Error ? err.message : 'Lost touch with the study room.')
     }
   }, [code])
 
@@ -90,7 +86,7 @@ export function useRoom(code: string, studyingSince: number | null, present = tr
       failuresRef.current = 0
       setBeatFailing(false)
     } catch (err) {
-      console.error('group study presence failed', err)
+      console.error('study room presence failed', err)
       failuresRef.current += 1
       if (failuresRef.current >= 2) setBeatFailing(true)
     }
@@ -100,31 +96,27 @@ export function useRoom(code: string, studyingSince: number | null, present = tr
   useEffect(() => {
     studyingRef.current = studyingSince
     // eslint-disable-next-line react-hooks/set-state-in-effect -- presence sync, not derived state
-    void (present ? beat() : Promise.resolve()).then(load)
-  }, [studyingSince, present, beat, load])
+    void beat().then(load)
+  }, [studyingSince, beat, load])
 
   useEffect(() => {
-    if (!present) return
     const beats = setInterval(() => void beat(), BEAT_MS)
-    return () => clearInterval(beats)
-  }, [present, beat])
-
-  useEffect(() => {
     const polls = setInterval(() => void load(), POLL_MS)
     const onVisible = () => {
       if (document.visibilityState === 'visible') void load()
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
+      clearInterval(beats)
       clearInterval(polls)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [load])
+  }, [beat, load])
 
   return { state, error, beatFailing, reload: load }
 }
 
-// A member's time in this group study, counting a session running now.
+// A member's time in this room, counting a session running now.
 export function memberMs(m: { bankedMs: number; liveSince: number | null }, now: number): number {
   return m.bankedMs + (m.liveSince !== null ? Math.max(0, now - m.liveSince) : 0)
 }
