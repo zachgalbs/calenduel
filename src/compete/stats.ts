@@ -219,3 +219,37 @@ export function formatStudyTime(ms: number): string {
   const m = totalMin % 60
   return h > 0 ? `${h}h ${String(m).padStart(2, '0')}m` : `${m}m`
 }
+
+// One person's last week at a glance, for a row on the Friends page.
+export interface WeekSummary {
+  todayMs: number
+  weekMs: number // the last 7 days, today included
+  week: number[] // those 7 days, oldest first, today last
+  lastDay: string | null // the most recent day with any study, ever
+  streak: number
+  focusMs: number // over the last 7 days
+  analyzedMs: number
+}
+
+export function weekSummary(totals: DailyTotal[], userId: string, today: string): WeekSummary {
+  const byDay = totalsFor(totals, userId)
+  const from = addDays(today, -(RECENT_DAYS - 1))
+  const week: number[] = []
+  for (let i = RECENT_DAYS - 1; i >= 0; i--) week.push(byDay.get(addDays(today, -i)) ?? 0)
+  let lastDay: string | null = null
+  for (const day of byDay.keys()) if (lastDay === null || day > lastDay) lastDay = day
+  const focus = focusSince(
+    totals.filter((t) => t.day <= today),
+    userId,
+    from,
+  )
+  return {
+    todayMs: byDay.get(today) ?? 0,
+    weekMs: week.reduce((a, b) => a + b, 0),
+    week,
+    lastDay,
+    streak: currentStreak(new Set(byDay.keys()), today),
+    focusMs: focus.focusMs,
+    analyzedMs: focus.analyzedMs,
+  }
+}

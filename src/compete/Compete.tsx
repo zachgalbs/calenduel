@@ -18,14 +18,16 @@ import {
   type Profile,
 } from './api'
 import {
-  dailyStandings,
+  addDays,
   focusPercent,
   formatStudyTime,
-  headToHead,
+  liveMs,
   localDay,
+  weekSummary,
   withLive,
   type DailyTotal,
   type LiveSession,
+  type WeekSummary,
 } from './stats'
 import Avatar from '../Avatar'
 import './Compete.css'
@@ -128,25 +130,69 @@ function FriendSessions({ friendId }: { friendId: string }) {
   )
 }
 
-function FriendCard({
+// "Studied yesterday", "Studied Tuesday", "Studied Nov 4": briefly, when.
+function lastStudied(day: string | null, today: string): string {
+  if (day === null) return 'Hasn’t studied yet'
+  if (day === addDays(today, -1)) return 'Studied yesterday'
+  const date = new Date(`${day}T12:00:00`)
+  return day > addDays(today, -7)
+    ? `Studied ${date.toLocaleDateString([], { weekday: 'long' })}`
+    : `Studied ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
+}
+
+// Seven small bars, oldest to today, on one scale for everyone on the page.
+function WeekBars({ week, scaleMs }: { week: number[]; scaleMs: number }) {
+  const total = week.reduce((a, b) => a + b, 0)
+  return (
+    <span className="week-bars" role="img" aria-label={`${formatStudyTime(total)} this week`}>
+      {week.map((ms, i) => (
+        <span
+          key={i}
+          className="week-bar"
+          data-today={i === week.length - 1}
+          style={{ height: ms > 0 ? `${Math.max(12, Math.round((100 * ms) / scaleMs))}%` : undefined }}
+        />
+      ))}
+    </span>
+  )
+}
+
+type Status = { kind: 'studying' | 'break'; ms: number } | null
+
+// One friend, one line: who, what they're doing or when they last studied,
+// their week, and a way in. Opening it shows the rest.
+function FriendRow({
   friend,
-  me,
-  totals,
+  summary,
+  status,
+  scaleMs,
   today,
-  live,
+  joinCode,
+  onJoin,
   onRemoved,
 }: {
   friend: Friend
-  me: Profile
-  totals: DailyTotal[]
+  summary: WeekSummary
+  status: Status
+  scaleMs: number
   today: string
-  live: boolean
+  joinCode: string | null
+  onJoin: (code: string) => void
   onRemoved: () => void
 }) {
+  const [open, setOpen] = useState(false)
+  const [sessionsOpen, setSessionsOpen] = useState(false)
   const [confirming, setConfirming] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const [sessionsOpen, setSessionsOpen] = useState(false)
-  const h = headToHead(totals, me.id, friend.id, friend.since, today)
+
+  const line =
+    status?.kind === 'studying'
+      ? `Studying · ${formatStudyTime(status.ms)}`
+      : status?.kind === 'break'
+        ? 'On a break'
+        : summary.todayMs > 0
+          ? `${formatStudyTime(summary.todayMs)} today`
+          : lastStudied(summary.lastDay, today)
 
   async function handleRemove() {
     setError(null)
@@ -159,169 +205,85 @@ function FriendCard({
   }
 
   return (
-    <li className="friend-card">
-      <div className="friend-head">
-        <div className="friend-who">
-          <Avatar name={friend.name} src={friend.avatar} />
-          <h3 className="friend-name">{friend.name}</h3>
-          <LiveDot on={live} />
-        </div>
-        <p className="friend-since">friends since {shortDay(friend.since)}</p>
-      </div>
-
-      <table className="compete-table">
-        <thead>
-          <tr>
-            <th scope="col" />
-            <th scope="col">You</th>
-            <th scope="col">{friend.name}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr>
-            <th scope="row">Total time</th>
-            <td>{formatStudyTime(h.myTotalMs)}</td>
-            <td>{formatStudyTime(h.theirTotalMs)}</td>
-          </tr>
-          <tr>
-            <th scope="row" className="focus-row">
-              Focus time
-            </th>
-            <td>{formatStudyTime(h.myFocusMs)}</td>
-            <td>{formatStudyTime(h.theirFocusMs)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Focus %</th>
-            <td>{percentText(h.myFocusMs, h.myAnalyzedMs)}</td>
-            <td>{percentText(h.theirFocusMs, h.theirAnalyzedMs)}</td>
-          </tr>
-          <tr>
-            <th scope="row">Streak</th>
-            <td>{plural(h.myStreak, 'day')}</td>
-            <td>{plural(h.theirStreak, 'day')}</td>
-          </tr>
-        </tbody>
-      </table>
-      <details className="friend-days">
-        <summary>Last 7 days</summary>
-        <table className="compete-table">
-          <tbody>
-            {h.recent.map((d) => (
-              <tr key={d.day}>
-                <th scope="row">{d.day === today ? 'Today' : shortDay(d.day)}</th>
-                <td>{formatStudyTime(d.myMs)}</td>
-                <td>{formatStudyTime(d.theirMs)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </details>
-
-      <details
-        className="friend-days"
-        onToggle={(e) => setSessionsOpen(e.currentTarget.open)}
-      >
-        <summary>Study sessions</summary>
-        {sessionsOpen && <FriendSessions friendId={friend.id} />}
-      </details>
-
-      <div className="friend-actions">
-        {confirming ? (
-          <>
-            <span className="compete-note">
-              If you add each other again, your history together starts over.
+    <li className="friend-row" data-live={status !== null}>
+      <details onToggle={(e) => setOpen(e.currentTarget.open)}>
+        <summary className="friend-line">
+          <Avatar name={friend.name} src={friend.avatar} size={36} />
+          <span className="friend-who">
+            <span className="friend-name">
+              {friend.name}
+              <LiveDot on={status?.kind === 'studying'} />
             </span>
-            <button type="button" className="compete-btn danger" onClick={handleRemove}>
-              Remove {friend.name}
-            </button>
-            <button
-              type="button"
-              className="compete-btn"
-              onClick={() => setConfirming(false)}
+            <span className="friend-status">{line}</span>
+          </span>
+          <WeekBars week={summary.week} scaleMs={scaleMs} />
+          {/* The slot is always there, so the week bars line up row to row. */}
+          <span className="friend-join">
+            {joinCode && (
+              <button
+                type="button"
+                className="compete-btn primary"
+                onClick={(e) => {
+                  e.preventDefault() // a click on Join shouldn't also open the row
+                  onJoin(joinCode)
+                }}
+              >
+                Join
+              </button>
+            )}
+          </span>
+        </summary>
+
+        {open && (
+          <div className="friend-more">
+            <dl className="friend-facts">
+              <div>
+                <dt>This week</dt>
+                <dd>{formatStudyTime(summary.weekMs)}</dd>
+              </div>
+              <div>
+                <dt>Streak</dt>
+                <dd>{plural(summary.streak, 'day')}</dd>
+              </div>
+              <div>
+                <dt>Focus</dt>
+                <dd>{percentText(summary.focusMs, summary.analyzedMs)}</dd>
+              </div>
+              <div>
+                <dt>Friends since</dt>
+                <dd>{shortDay(friend.since)}</dd>
+              </div>
+            </dl>
+
+            <details
+              className="friend-sessions"
+              onToggle={(e) => setSessionsOpen(e.currentTarget.open)}
             >
-              Keep
-            </button>
-          </>
-        ) : (
-          <button
-            type="button"
-            className="compete-link"
-            onClick={() => setConfirming(true)}
-          >
-            Remove friend
-          </button>
-        )}
-      </div>
-      {error && <p className="compete-error" role="alert">{error}</p>}
-    </li>
-  )
-}
+              <summary>Sessions</summary>
+              {sessionsOpen && <FriendSessions friendId={friend.id} />}
+            </details>
 
-// The top of the page: friends in a session right now, and a way in. A break
-// still counts (their room stays open); a session that's stopped and waiting on
-// its upload doesn't, so it's left out.
-function StudyingNow({
-  live,
-  rooms,
-  friends,
-  now,
-  room,
-  onJoin,
-}: {
-  live: LiveSession[]
-  rooms: Map<string, string>
-  friends: Friend[]
-  now: number
-  room: string | null
-  onJoin: (code: string) => void
-}) {
-  const byId = new Map(friends.map((f) => [f.id, f]))
-  const rows = live.filter(
-    (s) => byId.has(s.userId) && (s.frozenAt === null || rooms.has(s.userId)),
-  )
-
-  return (
-    <section className="compete-section">
-      <h2>Studying now</h2>
-      {rows.length === 0 ? (
-        <p className="compete-note">
-          None of your friends are studying right now. When one starts, they'll
-          show up here and you can join them.
-        </p>
-      ) : (
-        <ul className="now-list">
-          {rows.map((s) => {
-            const friend = byId.get(s.userId)!
-            const code = rooms.get(s.userId)
-            const onBreak = s.frozenAt !== null
-            return (
-              <li key={s.userId} className="now-row">
-                <Avatar name={friend.name} src={friend.avatar} />
-                <div className="now-who">
-                  <span className="now-name">
-                    {friend.name}
-                    <LiveDot on={!onBreak} />
-                  </span>
-                  <span className="now-status">
-                    {onBreak ? 'On a break' : 'Studying'} for{' '}
-                    <span className="now-time">{formatStudyTime((s.frozenAt ?? now) - s.since)}</span>
-                  </span>
-                </div>
-                {code && code !== room && (
-                  <button
-                    type="button"
-                    className="compete-btn primary"
-                    onClick={() => onJoin(code)}
-                  >
-                    Join
+            <div className="friend-actions">
+              {confirming ? (
+                <>
+                  <button type="button" className="compete-btn danger" onClick={handleRemove}>
+                    Remove {friend.name}
                   </button>
-                )}
-              </li>
-            )
-          })}
-        </ul>
-      )}
-    </section>
+                  <button type="button" className="compete-btn" onClick={() => setConfirming(false)}>
+                    Keep
+                  </button>
+                </>
+              ) : (
+                <button type="button" className="compete-link" onClick={() => setConfirming(true)}>
+                  Remove friend
+                </button>
+              )}
+            </div>
+            {error && <p className="compete-error" role="alert">{error}</p>}
+          </div>
+        )}
+      </details>
+    </li>
   )
 }
 
@@ -582,26 +544,44 @@ export default function Compete({
     }
   }
 
-  // The green dot: in a session and not on a break.
-  const studying = new Set(live.filter((s) => s.frozenAt === null).map((s) => s.userId))
   const totals = board ? withLive(board.totals, live, now) : []
-  const standings = board
-    ? dailyStandings(
-        totals,
-        [{ id: board.profile.id, name: board.profile.name }, ...board.friends],
-        board.today,
-      )
+  // What each friend is doing now. A break keeps its room open, so it counts;
+  // a stopped session waiting on its upload doesn't.
+  const statusOf = (id: string): Status => {
+    const s = live.find((l) => l.userId === id)
+    if (!s) return null
+    if (s.frozenAt === null) return { kind: 'studying', ms: liveMs(s, now) }
+    return rooms.has(id) ? { kind: 'break', ms: liveMs(s, now) } : null
+  }
+  const rows = board
+    ? board.friends.map((f) => ({
+        friend: f,
+        summary: weekSummary(totals, f.id, board.today),
+        status: statusOf(f.id),
+      }))
     : []
-  // The standings only carry ids and names, so pictures are looked up beside them.
-  const avatars = new Map(
-    board
-      ? [board.profile, ...board.friends].map((p) => [p.id, p.avatar] as const)
-      : [],
-  )
+  // Who's here first, then who studied today, then the rest of the week.
+  // Anyone with nothing all week folds away into one line.
+  const rank = (r: (typeof rows)[number]) =>
+    r.status?.kind === 'studying' ? 2 : r.status?.kind === 'break' ? 1 : 0
+  const active = rows
+    .filter((r) => r.status !== null || r.summary.weekMs > 0)
+    .sort(
+      (a, b) =>
+        rank(b) - rank(a) ||
+        b.summary.todayMs - a.summary.todayMs ||
+        b.summary.weekMs - a.summary.weekMs,
+    )
+  const quiet = rows.filter((r) => r.status === null && r.summary.weekMs === 0)
+  const scaleMs = Math.max(1, ...active.flatMap((r) => r.summary.week))
+  const myToday = board ? weekSummary(totals, board.profile.id, board.today).todayMs : 0
 
   return (
     <main className="compete">
-      <h1>Friends</h1>
+      <header className="compete-head">
+        <h1>Friends</h1>
+        {board && <span className="compete-me">You · {formatStudyTime(myToday)} today</span>}
+      </header>
 
       {error && <p className="compete-error" role="alert">{error}</p>}
 
@@ -641,68 +621,51 @@ export default function Compete({
           )}
 
           {board.friends.length > 0 && (
-            <StudyingNow
-              live={live}
-              rooms={rooms}
-              friends={board.friends}
-              now={now}
-              room={room}
-              onJoin={onJoin}
-            />
-          )}
-
-          <section className="compete-section">
-            <h2>Today</h2>
-            <div className="standing standing-head" aria-hidden="true">
-              <span />
-              <span />
-              <span>Total</span>
-              <span>Focus</span>
-            </div>
-            <ul className="standings">
-              {standings.map((s) => (
-                <li key={s.id} className="standing">
-                  <Avatar name={s.name} src={avatars.get(s.id) ?? null} />
-                  <span className="standing-name">
-                    {s.id === board.profile.id ? 'You' : s.name}
-                    <LiveDot on={studying.has(s.id)} />
-                  </span>
-                  <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
-                  <span
-                    className="standing-focus"
-                    aria-label={`${formatStudyTime(s.focusMs)} focused, ${percentText(s.focusMs, s.analyzedMs)} of analyzed time`}
-                  >
-                    {formatStudyTime(s.focusMs)}
-                    <span className="standing-percent">
-                      {percentText(s.focusMs, s.analyzedMs)}
-                    </span>
-                  </span>
-                </li>
-              ))}
-            </ul>
-            <p className="compete-note">
-              Sessions count while they run, toward the day they started. Focus
-              counts the sessions you analyze on the Sessions page, and the
-              percentage is out of that analyzed time.
-            </p>
-          </section>
-
-          {board.friends.length > 0 && (
             <section className="compete-section">
-              <h2>Your friends</h2>
-              <ul className="friend-list">
-                {board.friends.map((f) => (
-                  <FriendCard
-                    key={f.id}
-                    friend={f}
-                    me={board.profile}
-                    totals={totals}
-                    today={board.today}
-                    live={studying.has(f.id)}
-                    onRemoved={refresh}
-                  />
-                ))}
-              </ul>
+              {active.length > 0 ? (
+                <ul className="friend-rows">
+                  {active.map((r) => (
+                    <FriendRow
+                      key={r.friend.id}
+                      friend={r.friend}
+                      summary={r.summary}
+                      status={r.status}
+                      scaleMs={scaleMs}
+                      today={board.today}
+                      joinCode={
+                        rooms.has(r.friend.id) && rooms.get(r.friend.id) !== room
+                          ? rooms.get(r.friend.id)!
+                          : null
+                      }
+                      onJoin={onJoin}
+                      onRemoved={refresh}
+                    />
+                  ))}
+                </ul>
+              ) : (
+                <p className="compete-note">Nobody's studied this week yet.</p>
+              )}
+
+              {quiet.length > 0 && (
+                <details className="friend-quiet">
+                  <summary>{plural(quiet.length, 'friend')} quiet this week</summary>
+                  <ul className="friend-rows">
+                    {quiet.map((r) => (
+                      <FriendRow
+                        key={r.friend.id}
+                        friend={r.friend}
+                        summary={r.summary}
+                        status={null}
+                        scaleMs={scaleMs}
+                        today={board.today}
+                        joinCode={null}
+                        onJoin={onJoin}
+                        onRemoved={refresh}
+                      />
+                    ))}
+                  </ul>
+                </details>
+              )}
             </section>
           )}
 

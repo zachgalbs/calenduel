@@ -7,6 +7,7 @@ import {
   formatStudyTime,
   headToHead,
   localDay,
+  weekSummary,
   withLive,
   type DailyTotal,
   type LiveSession,
@@ -275,5 +276,42 @@ describe('withLive', () => {
 
   it('ignores a clock that hasn\'t started yet', () => {
     expect(withLive([], [live('me', TODAY, NOW + MIN)], NOW)).toEqual([])
+  })
+})
+
+describe('weekSummary', () => {
+  const t = (day: string, min: number, focusMin = 0, analyzedMin = 0) => ({
+    userId: 'a',
+    day,
+    totalMs: min * 60_000,
+    focusMs: focusMin * 60_000,
+    analyzedMs: analyzedMin * 60_000,
+  })
+
+  it('lays out the last 7 days, oldest first, and totals them', () => {
+    const s = weekSummary([t('2026-11-19', 30), t('2026-11-17', 60), t('2026-11-10', 90)], 'a', '2026-11-19')
+    expect(s.week.map((ms) => ms / 60_000)).toEqual([0, 0, 0, 0, 60, 0, 30])
+    expect(s.weekMs).toBe(90 * 60_000)
+    expect(s.todayMs).toBe(30 * 60_000)
+  })
+
+  it('remembers the last day studied, even beyond the week', () => {
+    expect(weekSummary([t('2026-11-01', 20)], 'a', '2026-11-19').lastDay).toBe('2026-11-01')
+    expect(weekSummary([], 'a', '2026-11-19').lastDay).toBeNull()
+  })
+
+  it('counts a streak that reaches yesterday', () => {
+    const s = weekSummary([t('2026-11-18', 10), t('2026-11-17', 10)], 'a', '2026-11-19')
+    expect(s.streak).toBe(2)
+  })
+
+  it('sums focus over the week only', () => {
+    const s = weekSummary([t('2026-11-19', 60, 40, 50), t('2026-11-01', 60, 60, 60)], 'a', '2026-11-19')
+    expect(s.focusMs).toBe(40 * 60_000)
+    expect(s.analyzedMs).toBe(50 * 60_000)
+  })
+
+  it('ignores other people', () => {
+    expect(weekSummary([{ ...t('2026-11-19', 30), userId: 'b' }], 'a', '2026-11-19').weekMs).toBe(0)
   })
 })
