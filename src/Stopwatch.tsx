@@ -3,18 +3,19 @@ import { NOT_PAUSED, studiedMs, type PauseState } from './session/elapsed'
 import './Stopwatch.css'
 
 // Deliberately almost nothing: the time as m:ss (h:mm:ss past an hour), one
-// size throughout, the seconds in a quieter grey.
-const LAP_MS = 60_000
+// size and one colour throughout. Each digit sits in its own fixed-width slot
+// and rolls up into place when it changes; the others stay perfectly still.
 // Re-read the clock a few times a second so each second flips close to when
 // it actually ticks over (a 1s interval could lag by up to a second).
 const TICK_MS = 250
 
-// Just minutes below an hour; h:mm past it.
-function formatMinutes(ms: number): string {
-  const totalMin = Math.floor(ms / LAP_MS)
-  const h = Math.floor(totalMin / 60)
-  const m = totalMin % 60
-  return h > 0 ? `${h}:${String(m).padStart(2, '0')}` : String(m)
+// m:ss below an hour; h:mm:ss past it.
+function formatClock(ms: number): string {
+  const totalSec = Math.floor(ms / 1000)
+  const h = Math.floor(totalSec / 3600)
+  const m = Math.floor((totalSec % 3600) / 60)
+  const sec = String(totalSec % 60).padStart(2, '0')
+  return h > 0 ? `${h}:${String(m).padStart(2, '0')}:${sec}` : `${m}:${sec}`
 }
 
 // Full time in words for screen readers.
@@ -50,7 +51,7 @@ export default function Stopwatch({
   // While paused, read at the pause itself: `now` stops updating then.
   const at = stoppedAt ?? (paused ? pause.pausedAt! : now)
   const elapsed = startedAt === null ? 0 : studiedMs(startedAt, at, pause)
-  const seconds = String(Math.floor((elapsed % LAP_MS) / 1000)).padStart(2, '0')
+  const chars = [...formatClock(elapsed)]
 
   return (
     <div
@@ -59,9 +60,21 @@ export default function Stopwatch({
       role="timer"
       aria-label={paused && stoppedAt === null ? `Paused at ${spokenTime(elapsed)}` : spokenTime(elapsed)}
     >
-      <span className="stopwatch-minutes" aria-hidden="true">
-        {formatMinutes(elapsed)}
-        <span className="stopwatch-seconds">:{seconds}</span>
+      <span className="stopwatch-digits" aria-hidden="true">
+        {chars.map((c, i) => {
+          // Slots are counted from the right, so 9:59 becoming 10:00 adds a
+          // slot on the left instead of reshuffling the seconds.
+          const slot = chars.length - i
+          return c === ':' ? (
+            <span key={`colon-${slot}`} className="stopwatch-colon">:</span>
+          ) : (
+            <span key={`slot-${slot}`} className="stopwatch-slot">
+              {/* Keyed by its value: a new digit mounts, and mounting is
+                  what plays the roll. */}
+              <span key={c} className="stopwatch-digit">{c}</span>
+            </span>
+          )
+        })}
       </span>
     </div>
   )

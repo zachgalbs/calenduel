@@ -1,29 +1,66 @@
 /* ─────────────────────────────────────────────────────────────────
-   Stopwatch — just the numbers. Minutes and seconds at one size, so it
-   reads as one time; the seconds sit back in the quieter grey.
+   Stopwatch — just the numbers, one size and one colour. Every digit
+   has a fixed-width slot, so nothing shifts as the time changes; a
+   digit that changes rolls up into its slot, and only that one moves.
    ───────────────────────────────────────────────────────────────── */
 
 .stopwatch {
   --size: clamp(3.5rem, 15vw, 6rem);
 }
 
-.stopwatch-minutes {
+.stopwatch-digits {
+  display: inline-flex;
+  align-items: baseline;
   font-family: var(--serif);
   font-size: var(--size);
   font-weight: 400;
-  line-height: 0.85;
-  letter-spacing: -0.02em;
+  line-height: 1;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--text-h);
+  transition: opacity 0.3s ease;
 }
 
-/* Seconds: the same size, quieter. */
-.stopwatch-seconds {
-  color: var(--text);
+.stopwatch-slot {
+  display: inline-block;
+  width: 0.6em;
+  text-align: center;
+  overflow: hidden;
+  /* A little room above and below, so the roll isn't clipped by the slot. */
+  padding: 0.06em 0;
+}
+
+.stopwatch-colon {
+  display: inline-block;
+  width: 0.28em;
+  text-align: center;
+  transform: translateY(-0.06em);
+}
+
+.stopwatch-digit {
+  display: inline-block;
+  animation: stopwatch-roll 420ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes stopwatch-roll {
+  from {
+    transform: translateY(55%);
+    opacity: 0;
+    filter: blur(2px);
+  }
+  to {
+    transform: none;
+    opacity: 1;
+    filter: none;
+  }
 }
 
 /* On a break: the numbers fade back until studying resumes. */
-.stopwatch[data-paused='true'] .stopwatch-minutes {
+.stopwatch[data-paused='true'] .stopwatch-digits {
   opacity: 0.4;
-  transition: opacity 0.2s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .stopwatch-digit {
+    animation: none;
+  }
 }

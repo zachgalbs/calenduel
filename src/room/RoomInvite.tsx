@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react'
 import type { RoomPreview } from '../compete/api'
 
-// Under the Start button when a study room link brought you here: whose room
-// it is, and that pressing Start joins it. Says nothing for a room you're
-// already in (a refresh), since Start just carries on there.
+// Under the timer when a study room link brought you here: whose room it is,
+// and that starting joins it. Says nothing for a room you're already in (a
+// refresh), since starting just carries on there.
 export default function RoomInvite({ code, onDismiss }: { code: string; onDismiss: () => void }) {
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   // undefined = still loading; null = no room has this code.
@@ -60,7 +60,7 @@ export default function RoomInvite({ code, onDismiss }: { code: string; onDismis
   if (preview === null || preview.expired) {
     return (
       <p className="session-notice" role="status">
-        That study link has expired. Start studies on your own.
+        That study link has expired. Starting studies on your own.
       </p>
     )
   }
@@ -69,7 +69,7 @@ export default function RoomInvite({ code, onDismiss }: { code: string; onDismis
   return (
     <div className="session-recover" role="status">
       <p>
-        Press Start to study with {preview.hostName}
+        Press Enter to study with {preview.hostName}
         {others > 0 ? ` and ${others} ${others === 1 ? 'other' : 'others'}` : ''}. You'll
         see when each other are studying and for how long, never what. Joining also
         adds everyone in it as your friends.

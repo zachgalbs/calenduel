@@ -103,7 +103,7 @@ export default function SessionTimer({
   const still = useStill(status === 'running')
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
-  // Optional, and never required to start: Start stays one click. It can be
+  // Optional, and never required to start: Enter starts with or without it. It can be
   // typed before or during the session, and is fixed once Stop is pressed
   // (after that, rename it on the Sessions page).
   const [name, setName] = useState('')
@@ -202,7 +202,7 @@ export default function SessionTimer({
 
   // Arriving from a Join click on Compete: start once, on that click's
   // gesture (a browser counts a click as one for a few seconds). If it has
-  // lapsed, the picker refuses and the Start button is right here.
+  // lapsed, the picker refuses and Enter in the name starts it instead.
   const autoStartedRef = useRef(false)
   useEffect(() => {
     if (!autoStart || autoStartedRef.current || status !== 'idle') return
@@ -440,39 +440,43 @@ export default function SessionTimer({
       )}
 
       <div className="session-clock">
-        <input
-          className="session-name"
-          aria-label="Session name"
-          placeholder={status === 'idle' ? 'Name this session' : DEFAULT_SESSION_NAME}
-          maxLength={SESSION_NAME_MAX}
-          autoComplete="off"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key !== 'Enter') return
-            e.currentTarget.blur()
-            // Name it, press Enter, you're studying. The key press is the
-            // gesture the screen picker needs, as a click on Start would be.
-            if (status === 'idle') void handleStart()
-          }}
-          readOnly={status === 'encoding' || status === 'done'}
-        />
+        <div className="session-name-row">
+          <input
+            className="session-name"
+            aria-label="Session name"
+            // Ready to type the moment the timer shows: name it, press Enter.
+            autoFocus={status === 'idle'}
+            placeholder={status === 'idle' ? 'What are you studying?' : DEFAULT_SESSION_NAME}
+            maxLength={SESSION_NAME_MAX}
+            autoComplete="off"
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key !== 'Enter') return
+              e.currentTarget.blur()
+              // Name it, press Enter, you're studying. The key press is the
+              // gesture the screen picker needs, as a click on Start would be.
+              if (status === 'idle') void handleStart()
+            }}
+            readOnly={status === 'encoding' || status === 'done'}
+          />
+          {/* The only start control: Enter does it, this is for the mouse. */}
+          {status === 'idle' && (
+            <button
+              type="button"
+              className="session-go"
+              aria-label="Start"
+              title="Start"
+              onClick={() => handleStart()}
+            >
+              ↵
+            </button>
+          )}
+        </div>
         <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} pause={pause} />
       </div>
 
       <div className="session-actions" data-still={still}>
-        {status === 'idle' && (
-          <button type="button" className="session-start" onClick={() => handleStart()}>
-            Start
-          </button>
-        )}
-
-        {status === 'starting' && (
-          <button type="button" className="session-start" disabled>
-            Starting…
-          </button>
-        )}
-
         {status === 'running' && (
           <button type="button" className="session-stop" onClick={handleStop}>
             Stop
