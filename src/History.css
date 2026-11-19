@@ -192,3 +192,175 @@
   border-color: var(--error);
   background: transparent;
 }
+
+/* ── The bookshelf ────────────────────────────────────────────── */
+
+.shelf {
+  margin-bottom: 2.5rem;
+}
+
+/* Books stand on the board; too many for one shelf scroll sideways. */
+.shelf-books {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 18px 14px 0;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.shelf-book {
+  flex: none;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 0 10px;
+  border: 0;
+  border-radius: 4px 4px 2px 2px;
+  color: #fbf8f1;
+  box-shadow: inset -4px 0 0 rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  transition:
+    transform 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
+    filter 0.2s ease;
+}
+
+.shelf-book:hover {
+  filter: brightness(1.06);
+  transform: translateY(-4px);
+}
+
+/* The open book is pulled up off the shelf. */
+.shelf-book[data-open='true'] {
+  transform: translateY(-16px);
+}
+
+.shelf-book:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.shelf-book[data-unsorted='true'] {
+  background: var(--code-bg);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.shelf-title {
+  writing-mode: vertical-rl;
+  transform: rotate(180deg);
+  font-family: var(--serif);
+  font-size: 15px;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-height: calc(100% - 2.2rem);
+}
+
+.shelf-hours {
+  font-family: var(--mono);
+  font-size: 10px;
+  opacity: 0.85;
+}
+
+.shelf-board {
+  height: 14px;
+  border-radius: 3px;
+  background: var(--table-edge);
+  box-shadow: 0 6px 14px rgba(94, 74, 36, 0.15);
+}
+
+/* ── The open book ────────────────────────────────────────────── */
+
+.book-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
+}
+
+.book-head h2 {
+  margin: 0;
+  font-family: var(--serif);
+  font-weight: 400;
+  font-size: 24px;
+  color: var(--text-h);
+}
+
+.book-head span {
+  font-size: 13px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
+.book-sessions {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.book-session {
+  border-bottom: 1px solid var(--border);
+}
+
+.book-line {
+  width: 100%;
+  display: flex;
+  align-items: baseline;
+  gap: 0.75rem;
+  padding: 0.7rem 0;
+  font: inherit;
+  text-align: left;
+  color: var(--text-h);
+  background: none;
+  border: 0;
+  cursor: pointer;
+}
+
+.book-line:hover .book-name {
+  color: var(--accent);
+}
+
+.book-line:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+.book-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 15px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  transition: color 0.15s ease;
+}
+
+.book-when {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.book-length {
+  width: 4.5rem;
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Opened: the full card, without its own top rule. */
+.book-session .history-card {
+  border: 0;
+  padding-top: 0.25rem;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .shelf-book {
+    transition: none;
+  }
+}

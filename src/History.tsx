@@ -14,6 +14,8 @@ import SubjectField, { SubjectOptions } from './subjects/SubjectField'
 import RecheckAll from './focus/RecheckAll' // one-time, 2026-11-13
 import { SUBJECTS_CHANGED, savedNames, sortSessions } from './subjects/sort'
 import { knownSubjects } from './subjects/subjects'
+import { UNSORTED, bookSeed, latestBook, shelfBooks, type Book } from './subjects/shelf'
+import { addDays, localDay } from './compete/stats'
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString([], {
@@ -171,6 +173,110 @@ function SessionCard({ session, subjects, onChanged }: {
   )
 }
 
+// Spines in muted bindings; a book keeps its colour and height for good.
+const BINDINGS = ['#4f8a5b', '#a8884b', '#6d7f96', '#8b7aa0', '#b07a5e', '#5f8c8a', '#9a6b7c', '#5b6d8f']
+
+function spineTime(ms: number): string {
+  const min = Math.round(ms / 60_000)
+  return min >= 60 ? `${Math.round(min / 60)}h` : `${min}m`
+}
+
+function totalTime(ms: number): string {
+  const min = Math.round(ms / 60_000)
+  const h = Math.floor(min / 60)
+  return h > 0 ? `${h}h ${String(min % 60).padStart(2, '0')}m` : `${min}m`
+}
+
+// "Today", "Yesterday", "Tuesday", or "Nov 12".
+function whenLabel(ms: number): string {
+  const day = localDay(ms)
+  const today = localDay(Date.now())
+  if (day === today) return 'Today'
+  if (day === addDays(today, -1)) return 'Yesterday'
+  const d = new Date(ms)
+  return day > addDays(today, -7)
+    ? d.toLocaleDateString([], { weekday: 'long' })
+    : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
+}
+
+function Shelf({ books, open, onOpen }: {
+  books: Book[]
+  open: string | null
+  onOpen: (key: string) => void
+}) {
+  const most = Math.max(...books.map((b) => b.ms), 1)
+  // Each book its own binding: its usual one if it's free, else the next free.
+  const taken = new Set<number>()
+  const binding = new Map<string, string>()
+  for (const b of books) {
+    if (b.key === UNSORTED) continue
+    let i = bookSeed(b.key) % BINDINGS.length
+    for (let n = 0; n < BINDINGS.length && taken.has(i); n++) i = (i + 1) % BINDINGS.length
+    taken.add(i)
+    binding.set(b.key, BINDINGS[i])
+  }
+  return (
+    <div className="shelf">
+      <div className="shelf-books">
+        {books.map((b) => {
+          const seed = bookSeed(b.key)
+          const unsorted = b.key === UNSORTED
+          const label = b.name ?? 'Unsorted'
+          return (
+            <button
+              key={b.key}
+              type="button"
+              className="shelf-book"
+              data-open={b.key === open}
+              data-unsorted={unsorted}
+              aria-pressed={b.key === open}
+              aria-label={`${label}, ${totalTime(b.ms)}, ${b.sessions.length} ${b.sessions.length === 1 ? 'session' : 'sessions'}`}
+              onClick={() => onOpen(b.key)}
+              style={{
+                width: Math.round(30 + 64 * Math.sqrt(b.ms / most)),
+                height: 168 + (seed % 48),
+                background: binding.get(b.key),
+              }}
+            >
+              <span className="shelf-title">{label}</span>
+              <span className="shelf-hours">{spineTime(b.ms)}</span>
+            </button>
+          )
+        })}
+      </div>
+      <div className="shelf-board" aria-hidden="true" />
+    </div>
+  )
+}
+
+// A session, folded to one line until you open it.
+function SessionRow({ session, subjects, onChanged }: {
+  session: SessionMeta
+  subjects: string[]
+  onChanged: () => void
+}) {
+  const [open, setOpen] = useState(false)
+  return (
+    <li className="book-session" data-open={open}>
+      <button
+        type="button"
+        className="book-line"
+        aria-expanded={open}
+        onClick={() => setOpen((o) => !o)}
+      >
+        <span className="book-name">{session.task}</span>
+        <span className="book-when">{whenLabel(session.startedAt)}</span>
+        <span className="book-length">{totalTime(session.elapsedMs)}</span>
+      </button>
+      {open && (
+        <ul className="history-list">
+          <SessionCard session={session} subjects={subjects} onChanged={onChanged} />
+        </ul>
+      )}
+    </li>
+  )
+}
+
 export default function History() {
   const [sessions, setSessions] = useState<SessionMeta[] | null>(null)
 
@@ -190,6 +296,11 @@ export default function History() {
     return () => window.removeEventListener(SUBJECTS_CHANGED, refresh)
   }, [refresh])
   const subjects = sessions ? knownSubjects(sessions, savedNames()) : []
+  const books = sessions ? shelfBooks(sessions, subjects) : []
+  // Opens on the book you studied in last; a choice holds while it exists.
+  const [picked, setPicked] = useState<string | null>(null)
+  const openKey = books.some((b) => b.key === picked) ? picked : latestBook(books)
+  const book = books.find((b) => b.key === openKey) ?? null
 
   return (
     <main className="history">
@@ -203,12 +314,23 @@ export default function History() {
 
       {sessions !== null && <RecheckAll sessions={sessions} />}
 
-      {sessions !== null && sessions.length > 0 && (
-        <ul className="history-list">
-          {sessions.map((s) => (
-            <SessionCard key={s.id} session={s} subjects={subjects} onChanged={refresh} />
-          ))}
-        </ul>
+      {books.length > 0 && <Shelf books={books} open={openKey} onOpen={setPicked} />}
+
+      {book && (
+        <section className="book" aria-label={book.name ?? 'Unsorted'}>
+          <header className="book-head">
+            <h2>{book.name ?? 'Unsorted'}</h2>
+            <span>
+              {totalTime(book.ms)} · {book.sessions.length}{' '}
+              {book.sessions.length === 1 ? 'session' : 'sessions'}
+            </span>
+          </header>
+          <ul className="book-sessions">
+            {book.sessions.map((s) => (
+              <SessionRow key={s.id} session={s} subjects={subjects} onChanged={refresh} />
+            ))}
+          </ul>
+        </section>
       )}
       <SubjectOptions subjects={subjects} />
     </main>
