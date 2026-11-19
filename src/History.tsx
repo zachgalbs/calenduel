@@ -82,7 +82,7 @@ function SessionCard({ session, subjects, onChanged }: {
       const { deleteUploadedSession } = await import('./compete/api')
       await deleteUploadedSession(session.id)
     } catch {
-      setDeleteError("Couldn't remove this from your competition stats. Try again.")
+      setDeleteError("Couldn't remove this from what your friends see. Try again.")
       return
     }
     await deleteSession(session.id)

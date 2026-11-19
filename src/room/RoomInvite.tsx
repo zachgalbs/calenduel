@@ -72,7 +72,7 @@ export default function RoomInvite({ code, onDismiss }: { code: string; onDismis
         Press Start to study with {preview.hostName}
         {others > 0 ? ` and ${others} ${others === 1 ? 'other' : 'others'}` : ''}. You'll
         see when each other are studying and for how long, never what. Joining also
-        adds everyone in it as friends on Compete.
+        adds everyone in it as your friends.
       </p>
       <div className="session-recover-actions">
         <button type="button" className="session-link" onClick={onDismiss}>

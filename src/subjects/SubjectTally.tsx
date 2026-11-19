@@ -92,7 +92,7 @@ function Status({ report, auto, onTurnOn, onTurnOff }: {
     )
   }
   let line = 'Sorted automatically from session names. Change any one on Sessions.'
-  if (report?.problem === 'signed-out') line = 'Sign in on Compete to sort sessions automatically.'
+  if (report?.problem === 'signed-out') line = 'Sign in on the Friends tab to sort sessions automatically.'
   else if (report?.problem === 'limited') line = 'Sorting paused for a minute. It picks up again next visit.'
   else if (report?.problem === 'failed') line = "Couldn't sort some sessions just now. It tries again next visit."
   else if (report === null) line = 'Sorting…'

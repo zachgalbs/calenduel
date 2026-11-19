@@ -6,11 +6,11 @@ import PageBoundary from './PageBoundary'
 import { roomFromUrl, saveRoom, savedRoom } from './room/useRoom'
 import './App.css'
 
-// The auth and database SDK is big and only competition features use it, so
+// The auth and database SDK is big and only the friends features use it, so
 // it loads on demand rather than slowing down the timer.
 const Compete = lazy(() => import('./compete/Compete'))
 
-const PAGES = ['timer', 'history', 'compete', 'account'] as const
+const PAGES = ['timer', 'history', 'friends', 'account'] as const
 type Page = (typeof PAGES)[number]
 
 function isPage(value: string | null): value is Page {
@@ -18,13 +18,15 @@ function isPage(value: string | null): value is Page {
 }
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
-// Invite links land on Compete and study room links on the timer, ready to
+// Invite links land on Friends and study room links on the timer, ready to
 // join; the return trip from Google sign-in keeps the tab it left from.
+// ?tab=compete is the page's old name, still in older links and bookmarks.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
   if (roomFromUrl()) return 'timer'
-  if (params.has('invite')) return 'compete'
+  if (params.has('invite')) return 'friends'
   const tab = params.get('tab')
+  if (tab === 'compete') return 'friends'
   return isPage(tab) ? tab : 'timer'
 }
 
@@ -58,7 +60,7 @@ function App() {
   // The study room this tab is in, or is about to join (see room/useRoom.ts).
   // Every signed-in session has one; SessionTimer creates it on Start.
   const [room, setRoom] = useState<string | null>(() => roomFromUrl() ?? savedRoom())
-  // Set by Compete's Join click: the timer starts on arrival, while that click
+  // Set by a Join click on Friends: the timer starts on arrival, while that click
   // still counts as the gesture the screen picker needs.
   const [autoStart, setAutoStart] = useState(false)
   
@@ -99,10 +101,10 @@ function App() {
           </button>
           <button
             type="button"
-            className={page === 'compete' ? 'nav-link active' : 'nav-link'}
-            onClick={() => setPage('compete')}
+            className={page === 'friends' ? 'nav-link active' : 'nav-link'}
+            onClick={() => setPage('friends')}
           >
-            Compete
+            Friends
           </button>
           {/* Settings-type page, so it sits apart from the tabs as an icon. */}
           <button
@@ -127,7 +129,7 @@ function App() {
           onActiveChange={setSessionActive}
           onSessionSaved={() => {
             setHistoryKey((k) => k + 1)
-            // Best effort: the session is safe locally, and opening Compete
+            // Best effort: the session is safe locally, and opening Friends
             // retries anything that didn't make it up. Returned, so the timer
             // knows when its live time can make way for the uploaded one.
             return import('./compete/api')
@@ -139,7 +141,7 @@ function App() {
 
       {page === 'history' && <History key={historyKey} />}
 
-      {page === 'compete' && (
+      {page === 'friends' && (
         <PageBoundary>
           <Suspense fallback={null}>
             <Compete

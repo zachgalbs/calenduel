@@ -1,5 +1,5 @@
 /* ─────────────────────────────────────────────────────────────────
-   Compete page — same editorial column as the Sessions page.
+   Friends page — same editorial column as the Sessions page.
    ───────────────────────────────────────────────────────────────── */
 
 .compete {
@@ -39,7 +39,7 @@
   margin: 0.75rem 0;
 }
 
-/* ── Today's standings ────────────────────────────────────────── */
+/* ── Today ─────────────────────────────────────────────────────── */
 
 .standings {
   list-style: none;
@@ -49,7 +49,7 @@
 
 .standing {
   display: grid;
-  grid-template-columns: 1.5rem auto 1fr auto 5.5rem;
+  grid-template-columns: auto 1fr auto 5.5rem;
   gap: 0.75rem;
   align-items: center;
   padding: 0.7rem 0;
@@ -58,12 +58,6 @@
 
 .standing:first-child {
   border-top: 1px solid var(--border);
-}
-
-.standing-rank {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--text);
 }
 
 .standing-name {
@@ -115,29 +109,71 @@
   white-space: normal;
 }
 
-.standing.leading .standing-rank,
-.standing.leading .standing-time {
-  color: var(--accent);
-}
+/* ── Studying now ─────────────────────────────────────────────── */
 
-/* ── Head to head ─────────────────────────────────────────────── */
-
-.rivals {
+.now-list {
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
-.rival {
+.now-row {
+  display: flex;
+  align-items: center;
+  gap: 0.85rem;
+  padding: 0.85rem 1rem;
+  margin-bottom: 0.5rem;
+  border: 1px solid var(--live-border);
+  background: var(--live-bg);
+  border-radius: 12px;
+}
+
+.now-who {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+}
+
+.now-name {
+  font-size: 15.5px;
+  font-weight: 500;
+  color: var(--text-h);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.now-status {
+  font-size: 13px;
+  color: var(--text);
+}
+
+.now-time {
+  font-family: var(--mono);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+}
+
+/* ── Your friends ─────────────────────────────────────────────── */
+
+.friend-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.friend-card {
   padding: 1.25rem 0;
   border-bottom: 1px solid var(--border);
 }
 
-.rival:first-child {
+.friend-card:first-child {
   border-top: 1px solid var(--border);
 }
 
-.rival-head {
+.friend-head {
   display: flex;
   justify-content: space-between;
   align-items: center;
@@ -145,14 +181,14 @@
   margin-bottom: 0.75rem;
 }
 
-.rival-who {
+.friend-who {
   display: flex;
   align-items: center;
   gap: 0.6rem;
   min-width: 0;
 }
 
-.rival-name {
+.friend-name {
   margin: 0;
   font-size: 15.5px;
   font-weight: 500;
@@ -163,7 +199,7 @@
   white-space: nowrap;
 }
 
-.rival-since {
+.friend-since {
   flex-shrink: 0;
   font-family: var(--mono);
   font-size: 11px;
@@ -205,26 +241,22 @@
   color: var(--text-h);
 }
 
-.compete-table td.ahead {
-  color: var(--accent);
-}
-
-.rival-days {
+.friend-days {
   margin-top: 0.75rem;
 }
 
-.rival-days summary {
+.friend-days summary {
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
   margin-bottom: 0.25rem;
 }
 
-.rival-days summary:hover {
+.friend-days summary:hover {
   color: var(--text-h);
 }
 
-.rival-actions {
+.friend-actions {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
@@ -233,7 +265,7 @@
   margin-top: 0.75rem;
 }
 
-.rival-actions .compete-note {
+.friend-actions .compete-note {
   margin: 0 auto 0 0;
 }
 
@@ -341,27 +373,3 @@
   vertical-align: middle;
 }
 
-/* Beside a friend's green dot: study in their room, on this click. */
-.standing-join {
-  margin-left: 8px;
-  font: inherit;
-  font-size: 11px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: var(--live);
-  background: var(--live-bg);
-  border: 1px solid var(--live-border);
-  border-radius: 999px;
-  padding: 1px 9px;
-  cursor: pointer;
-  vertical-align: middle;
-}
-
-.standing-join:hover {
-  filter: brightness(1.08);
-}
-
-.standing-join:focus-visible {
-  outline: 2px solid var(--live);
-  outline-offset: 2px;
-}

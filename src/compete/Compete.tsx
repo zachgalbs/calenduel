@@ -159,14 +159,14 @@ function FriendCard({
   }
 
   return (
-    <li className="rival">
-      <div className="rival-head">
-        <div className="rival-who">
+    <li className="friend-card">
+      <div className="friend-head">
+        <div className="friend-who">
           <Avatar name={friend.name} src={friend.avatar} />
-          <h3 className="rival-name">{friend.name}</h3>
+          <h3 className="friend-name">{friend.name}</h3>
           <LiveDot on={live} />
         </div>
-        <p className="rival-since">since {shortDay(friend.since)}</p>
+        <p className="friend-since">friends since {shortDay(friend.since)}</p>
       </div>
 
       <table className="compete-table">
@@ -178,11 +178,6 @@ function FriendCard({
           </tr>
         </thead>
         <tbody>
-          <tr>
-            <th scope="row">Days won</th>
-            <td>{h.wins}</td>
-            <td>{h.losses}</td>
-          </tr>
           <tr>
             <th scope="row">Total time</th>
             <td>{formatStudyTime(h.myTotalMs)}</td>
@@ -207,21 +202,15 @@ function FriendCard({
           </tr>
         </tbody>
       </table>
-      {h.ties > 0 && <p className="compete-note">{plural(h.ties, 'tied day')}</p>}
-
-      <details className="rival-days">
+      <details className="friend-days">
         <summary>Last 7 days</summary>
         <table className="compete-table">
           <tbody>
             {h.recent.map((d) => (
               <tr key={d.day}>
                 <th scope="row">{d.day === today ? 'Today' : shortDay(d.day)}</th>
-                <td className={d.myMs > d.theirMs ? 'ahead' : undefined}>
-                  {formatStudyTime(d.myMs)}
-                </td>
-                <td className={d.theirMs > d.myMs ? 'ahead' : undefined}>
-                  {formatStudyTime(d.theirMs)}
-                </td>
+                <td>{formatStudyTime(d.myMs)}</td>
+                <td>{formatStudyTime(d.theirMs)}</td>
               </tr>
             ))}
           </tbody>
@@ -229,17 +218,19 @@ function FriendCard({
       </details>
 
       <details
-        className="rival-days"
+        className="friend-days"
         onToggle={(e) => setSessionsOpen(e.currentTarget.open)}
       >
         <summary>Study sessions</summary>
         {sessionsOpen && <FriendSessions friendId={friend.id} />}
       </details>
 
-      <div className="rival-actions">
+      <div className="friend-actions">
         {confirming ? (
           <>
-            <span className="compete-note">Your record resets if you reconnect.</span>
+            <span className="compete-note">
+              If you add each other again, your history together starts over.
+            </span>
             <button type="button" className="compete-btn danger" onClick={handleRemove}>
               Remove {friend.name}
             </button>
@@ -266,12 +257,83 @@ function FriendCard({
   )
 }
 
+// The top of the page: friends in a session right now, and a way in. A break
+// still counts (their room stays open); a session that's stopped and waiting on
+// its upload doesn't, so it's left out.
+function StudyingNow({
+  live,
+  rooms,
+  friends,
+  now,
+  room,
+  onJoin,
+}: {
+  live: LiveSession[]
+  rooms: Map<string, string>
+  friends: Friend[]
+  now: number
+  room: string | null
+  onJoin: (code: string) => void
+}) {
+  const byId = new Map(friends.map((f) => [f.id, f]))
+  const rows = live.filter(
+    (s) => byId.has(s.userId) && (s.frozenAt === null || rooms.has(s.userId)),
+  )
+
+  return (
+    <section className="compete-section">
+      <h2>Studying now</h2>
+      {rows.length === 0 ? (
+        <p className="compete-note">
+          None of your friends are studying right now. When one starts, they'll
+          show up here and you can join them.
+        </p>
+      ) : (
+        <ul className="now-list">
+          {rows.map((s) => {
+            const friend = byId.get(s.userId)!
+            const code = rooms.get(s.userId)
+            const onBreak = s.frozenAt !== null
+            return (
+              <li key={s.userId} className="now-row">
+                <Avatar name={friend.name} src={friend.avatar} />
+                <div className="now-who">
+                  <span className="now-name">
+                    {friend.name}
+                    <LiveDot on={!onBreak} />
+                  </span>
+                  <span className="now-status">
+                    {onBreak ? 'On a break' : 'Studying'} for{' '}
+                    <span className="now-time">{formatStudyTime((s.frozenAt ?? now) - s.since)}</span>
+                  </span>
+                </div>
+                {code && code !== room && (
+                  <button
+                    type="button"
+                    className="compete-btn primary"
+                    onClick={() => onJoin(code)}
+                  >
+                    Join
+                  </button>
+                )}
+              </li>
+            )
+          })}
+        </ul>
+      )}
+    </section>
+  )
+}
+
 function InviteForm({
   inviteCode,
   onAdded,
+  first = false,
 }: {
   inviteCode: string
   onAdded: () => void
+  // No friends yet: this is the whole point of the page, so it says so.
+  first?: boolean
 }) {
   // An invite link fills in the code but doesn't act on it: connecting shares
   // your daily totals, so that should take a click, not just following a link.
@@ -303,9 +365,9 @@ function InviteForm({
     setAdding(true)
     try {
       const name = await addFriend(code)
-      setMessage(`You and ${name} are now competing.`)
+      setMessage(`You and ${name} are now friends.`)
       setCode('')
-      window.history.replaceState(null, '', '/?tab=compete')
+      window.history.replaceState(null, '', '/?tab=friends')
       onAdded()
     } catch (err) {
       setError(errorText(err))
@@ -316,11 +378,17 @@ function InviteForm({
 
   return (
     <section className="compete-section">
-      <h2>Add a friend</h2>
+      <h2>{first ? 'Bring a friend' : 'Add a friend'}</h2>
+      {first && (
+        <p className="compete-lead">
+          Studying is easier with company. Send a friend your link, and you'll see
+          when each other are studying and can join in.
+        </p>
+      )}
       <p className="compete-note">
         Friends see your name and your sessions from the day you connect: when
         each one started and how long it lasted. They never see your clips. Only
-        share your link with people you want to compete against.
+        share your link with people you'd like to study alongside.
       </p>
 
       <div className="invite-row">
@@ -533,7 +601,7 @@ export default function Compete({
 
   return (
     <main className="compete">
-      <h1>Compete</h1>
+      <h1>Friends</h1>
 
       {error && <p className="compete-error" role="alert">{error}</p>}
 
@@ -542,8 +610,8 @@ export default function Compete({
       {signedIn === false && (
         <section className="compete-section">
           <p className="compete-lead">
-            Every day is a contest. Whoever studies the most by midnight wins it,
-            and your record builds up day by day.
+            Study alongside your friends. See when they're studying, join them in
+            a click, and keep each other going day by day.
           </p>
           <button type="button" className="compete-btn primary" onClick={handleSignIn}>
             Sign in with Google
@@ -568,37 +636,36 @@ export default function Compete({
             </p>
           )}
 
+          {board.friends.length === 0 && (
+            <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} first />
+          )}
+
+          {board.friends.length > 0 && (
+            <StudyingNow
+              live={live}
+              rooms={rooms}
+              friends={board.friends}
+              now={now}
+              room={room}
+              onJoin={onJoin}
+            />
+          )}
+
           <section className="compete-section">
             <h2>Today</h2>
             <div className="standing standing-head" aria-hidden="true">
               <span />
               <span />
-              <span />
               <span>Total</span>
               <span>Focus</span>
             </div>
-            <ol className="standings">
+            <ul className="standings">
               {standings.map((s) => (
-                <li
-                  key={s.id}
-                  className={
-                    s.rank === 1 && s.totalMs > 0 ? 'standing leading' : 'standing'
-                  }
-                >
-                  <span className="standing-rank">{s.rank}</span>
+                <li key={s.id} className="standing">
                   <Avatar name={s.name} src={avatars.get(s.id) ?? null} />
                   <span className="standing-name">
                     {s.id === board.profile.id ? 'You' : s.name}
                     <LiveDot on={studying.has(s.id)} />
-                    {rooms.has(s.id) && rooms.get(s.id) !== room && (
-                      <button
-                        type="button"
-                        className="standing-join"
-                        onClick={() => onJoin(rooms.get(s.id)!)}
-                      >
-                        Join
-                      </button>
-                    )}
                   </span>
                   <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
                   <span
@@ -612,18 +679,18 @@ export default function Compete({
                   </span>
                 </li>
               ))}
-            </ol>
+            </ul>
             <p className="compete-note">
-              Sessions count while they run, toward the day they started.
-              Focus counts the sessions you analyze on the Sessions page, and the
-              percentage is out of that analyzed time. It doesn't decide who wins.
+              Sessions count while they run, toward the day they started. Focus
+              counts the sessions you analyze on the Sessions page, and the
+              percentage is out of that analyzed time.
             </p>
           </section>
 
           {board.friends.length > 0 && (
             <section className="compete-section">
-              <h2>Head to head</h2>
-              <ul className="rivals">
+              <h2>Your friends</h2>
+              <ul className="friend-list">
                 {board.friends.map((f) => (
                   <FriendCard
                     key={f.id}
@@ -639,7 +706,9 @@ export default function Compete({
             </section>
           )}
 
-          <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} />
+          {board.friends.length > 0 && (
+            <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} />
+          )}
 
           <button type="button" className="compete-link" onClick={handleSignOut}>
             Sign out {board.profile.name}

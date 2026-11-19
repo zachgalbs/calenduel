@@ -69,7 +69,7 @@ export default function ProfileSection() {
 
       {signedIn === false && (
         <p className="account-note">
-          Sign in on the Compete tab to set a profile picture.
+          Sign in on the Friends tab to set a profile picture.
         </p>
       )}
 
