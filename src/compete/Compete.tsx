@@ -347,11 +347,7 @@ function InviteForm({
           when each other are studying and can join in.
         </p>
       )}
-      <p className="compete-note">
-        Friends see your name and your sessions from the day you connect: when
-        each one started and how long it lasted. They never see your clips. Only
-        share your link with people you'd like to study alongside.
-      </p>
+      <p className="compete-note">They don't see your clips.</p>
 
       <div className="invite-row">
         <code className="invite-code">{inviteCode}</code>
