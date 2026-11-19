@@ -28,7 +28,6 @@ import {
   type LiveSession,
 } from './stats'
 import Avatar from '../Avatar'
-import Experimental from '../focus/Experimental'
 import './Compete.css'
 
 const REFRESH_MS = 60_000
@@ -192,7 +191,6 @@ function FriendCard({
           <tr>
             <th scope="row" className="focus-row">
               Focus time
-              <Experimental />
             </th>
             <td>{formatStudyTime(h.myFocusMs)}</td>
             <td>{formatStudyTime(h.theirFocusMs)}</td>
@@ -577,10 +575,7 @@ export default function Compete({
               <span />
               <span />
               <span>Total</span>
-              <span>
-                Focus
-                <Experimental />
-              </span>
+              <span>Focus</span>
             </div>
             <ol className="standings">
               {standings.map((s) => (
@@ -608,7 +603,7 @@ export default function Compete({
                   <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
                   <span
                     className="standing-focus"
-                    aria-label={`${formatStudyTime(s.focusMs)} focused, ${percentText(s.focusMs, s.analyzedMs)} of analyzed time, experimental`}
+                    aria-label={`${formatStudyTime(s.focusMs)} focused, ${percentText(s.focusMs, s.analyzedMs)} of analyzed time`}
                   >
                     {formatStudyTime(s.focusMs)}
                     <span className="standing-percent">

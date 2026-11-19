@@ -307,7 +307,7 @@ export async function fetchFriendSessions(friendId: string): Promise<FriendSessi
   )
 }
 
-// Experimental: on-task time from the session's current analysis, or null if
+// On-task time from the session's current analysis, or null if
 // it hasn't been analyzed under its current name. Capped at the uploaded length.
 function focusMs(s: SessionMeta): number | null {
   if (!s.focus || s.focus.task !== s.task) return null

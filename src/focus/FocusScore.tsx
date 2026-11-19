@@ -85,10 +85,8 @@ export default function FocusScore({ session, onChanged }: {
     <div className="focus-score">
       <details ref={detailsRef}>
         <summary>
-          <span aria-hidden="true">⚠</span>{' '}
           {summary?.percent !== null && summary?.percent !== undefined
             ? `${summary.percent}% focus` : focus ? 'Focus unclear' : 'Focus score'}
-          <span className="focus-experimental">Experimental</span>
         </summary>
         <p>Estimates visible activity related to “{session.task}”. It can miss paper work or misread your screen{hasIpad ? 's' : ''}.</p>
         {focus && summary && <>

@@ -2,7 +2,6 @@
 .focus-score summary { cursor: pointer; list-style: none; width: fit-content; color: var(--text-h); }
 .focus-score summary::-webkit-details-marker { display: none; }
 .focus-score summary > span:first-child { color: #b18a48; }
-.focus-experimental { margin-left: .5rem; color: var(--text); font-size: 10px; }
 .focus-score p { line-height: 1.6; margin: .65rem 0; }
 .focus-timeline { display: flex; width: 100%; gap: 1px; height: 22px; margin: .75rem 0; }
 .focus-segment { min-width: 0; flex-basis: 0; border: 0; border-radius: 0; padding: 0; cursor: pointer; background: var(--border-strong); }

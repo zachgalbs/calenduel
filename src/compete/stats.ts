@@ -5,7 +5,7 @@ export interface DailyTotal {
   userId: string
   day: string // YYYY-MM-DD
   totalMs: number
-  focusMs: number // experimental: the part of analyzed sessions judged on task
+  focusMs: number // the part of analyzed sessions judged on task
   analyzedMs: number // the length of the sessions that focus was measured on
 }
 

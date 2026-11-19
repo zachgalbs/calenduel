@@ -111,21 +111,8 @@
   text-align: right;
 }
 
-/* Stacked under its label, so the column stays as narrow as its times. */
-.standing-head .experimental {
-  display: block;
-  margin: 0.15rem 0 0;
-}
-
 .compete-table th.focus-row {
   white-space: normal;
-}
-
-@media (max-width: 480px) {
-  .compete-table th.focus-row .experimental {
-    display: block;
-    margin: 0.1rem 0 0;
-  }
 }
 
 .standing.leading .standing-rank,
