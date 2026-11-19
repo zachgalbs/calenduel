@@ -1,256 +1,88 @@
 /* ─────────────────────────────────────────────────────────────────
-   Study rooms — the panel beside the timer, shown once someone else
-   is in your room. Green is reserved for "studying right now".
+   The study table beside the timer. A camera (.study-world) scales a
+   fixed-size scene; everything in it moves by transform, so arrivals,
+   a growing table and the camera pulling back all animate.
    ───────────────────────────────────────────────────────────────── */
+
+.study-table {
+  position: relative;
+  width: 384px;
+  max-width: 100%;
+  height: 208px;
+  overflow: hidden;
+}
+
+.study-world {
+  position: absolute;
+  left: 50%;
+  top: 0;
+  width: 384px;
+  height: 208px;
+  margin-left: -192px;
+  transform-origin: 50% 50%;
+  transition: transform 1500ms cubic-bezier(0.45, 0, 0.2, 1);
+}
+
+.study-surface {
+  position: absolute;
+  box-sizing: border-box;
+  border-radius: 14px;
+  background: var(--table);
+  border: 1px solid var(--table-edge);
+  transition:
+    left 1100ms cubic-bezier(0.45, 0, 0.2, 1),
+    top 1100ms cubic-bezier(0.45, 0, 0.2, 1),
+    width 1100ms cubic-bezier(0.45, 0, 0.2, 1),
+    height 1100ms cubic-bezier(0.45, 0, 0.2, 1);
+}
+
+.study-seat,
+.study-lamp {
+  position: absolute;
+  left: 0;
+  top: 0;
+}
+
+.study-seat {
+  display: block;
+  line-height: 0;
+  transition:
+    transform 1400ms cubic-bezier(0.3, 0.7, 0.2, 1),
+    opacity 600ms ease;
+}
+
+/* Dim until someone's studying; lighting up waits for them to sit down. */
+.study-lamp {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  background: var(--lamp-off);
+  transition:
+    transform 1100ms cubic-bezier(0.45, 0, 0.2, 1),
+    opacity 400ms ease,
+    background-color 700ms ease 900ms,
+    box-shadow 1000ms ease 900ms;
+}
+
+.study-lamp[data-lit='true'] {
+  background: var(--lamp-on);
+  box-shadow:
+    0 0 0 4px var(--lamp-halo),
+    0 0 18px 8px var(--lamp-glow);
+}
 
 .room-error {
   font-size: 13px;
   color: var(--error);
-  margin: 1rem 0 0;
-}
-
-/* Who's here / studying */
-.room-live {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.45rem;
-  font-size: 12.5px;
-  color: var(--text-mute);
-  white-space: nowrap;
-  margin-top: 0.4rem;
-}
-
-.room-live.on {
-  color: var(--text-h);
-}
-
-.room-live-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: var(--border-strong);
-}
-
-.room-live.on .room-live-dot {
-  background: var(--live);
-  animation: room-pulse 2.4s ease-in-out infinite;
-}
-
-/* ── Members ──────────────────────────────────────────────────── */
-
-.members {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(9.5rem, 1fr));
-  gap: 0.75rem;
-}
-
-.member {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 0.15rem;
-  padding: 0.95rem 0.95rem 0.85rem;
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  background: var(--bg);
-  min-width: 0;
-  animation: room-arrive 0.35s ease-out;
-  transition: border-color 0.3s ease, opacity 0.3s ease;
-}
-
-.member.live {
-  border-color: var(--live-border);
-  background: var(--live-bg);
-}
-
-.member.away {
-  opacity: 0.55;
-}
-
-.member-face {
-  position: relative;
-  margin-bottom: 0.55rem;
-}
-
-.member-dot {
-  position: absolute;
-  right: -1px;
-  bottom: -1px;
-  width: 12px;
-  height: 12px;
-  border-radius: 50%;
-  background: var(--live);
-  border: 2px solid var(--bg-elev);
-}
-
-.member-body {
-  min-width: 0;
-  max-width: 100%;
-}
-
-.member-name {
-  font-size: 14.5px;
-  font-weight: 500;
-  color: var(--text-h);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.member-you {
-  font-weight: 400;
-  color: var(--text-mute);
-}
-
-.member-status {
-  font-size: 12.5px;
-  color: var(--text-mute);
-}
-
-.member-live {
-  color: var(--live);
-}
-
-.member-clock {
-  font-family: var(--mono);
-  font-variant-numeric: tabular-nums;
-}
-
-.member-total {
-  margin-top: 0.4rem;
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 0.4rem;
-  font-family: var(--mono);
-  font-size: 13px;
-  color: var(--text-h);
-}
-
-/* Compact: one row per person, for the panel beside the timer. */
-.members.compact {
-  display: flex;
-  flex-direction: column;
-  gap: 0;
-}
-
-.members.compact .member {
-  flex-direction: row;
-  align-items: center;
-  gap: 0.7rem;
-  padding: 0.55rem 0;
-  border: none;
-  border-bottom: 1px solid var(--border);
-  border-radius: 0;
-  background: none;
-}
-
-.members.compact .member:last-child {
-  border-bottom: none;
-}
-
-.members.compact .member-face {
-  margin: 0;
-}
-
-.members.compact .member-body {
-  flex: 1;
-}
-
-.members.compact .member-dot {
-  width: 10px;
-  height: 10px;
-}
-
-.members.compact .member-total {
-  margin: 0;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.2rem;
-}
-
-/* ── Panel beside the timer ───────────────────────────────────── */
-
-.room-panel {
-  width: 100%;
-  max-width: 24rem;
-  margin: 2rem auto 0;
-  padding: 0.9rem 1.1rem 0.75rem;
-  border: 1px solid var(--border);
-  border-radius: 12px;
-  background: var(--bg-elev);
-  text-align: left;
-}
-
-.room-panel-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  margin-bottom: 0.35rem;
-}
-
-.room-panel-head .room-live {
-  margin: 0;
-}
-
-.room-panel-title {
-  font-family: var(--serif);
-  font-size: 1.05rem;
-  color: var(--text-h);
-}
-
-.room-panel-foot {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 1rem;
-  margin-top: 0.4rem;
-  padding-top: 0.6rem;
-  border-top: 1px solid var(--border);
-  font-size: 12.5px;
-  color: var(--text);
-}
-
-/* ── Controls ─────────────────────────────────────────────────── */
-
-.room-link {
-  font: inherit;
-  font-size: 12.5px;
-  color: var(--text);
-  background: none;
-  border: none;
-  padding: 0;
-  cursor: pointer;
-  text-decoration: underline;
-  text-underline-offset: 3px;
-  text-decoration-color: var(--border-strong);
-}
-
-.room-link:hover {
-  color: var(--text-h);
-}
-
-@keyframes room-pulse {
-  0%, 100% { box-shadow: 0 0 0 0 var(--live-border); }
-  50% { box-shadow: 0 0 0 5px transparent; }
-}
-
-@keyframes room-arrive {
-  from { opacity: 0; transform: translateY(4px); }
+  margin: 0.5rem 0 0;
+  text-align: center;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .room-live.on .room-live-dot,
-  .member {
-    animation: none;
-  }
-}
-
-@media (max-width: 30rem) {
-  .members:not(.compact) {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
+  .study-world,
+  .study-surface,
+  .study-seat,
+  .study-lamp {
+    transition: none;
   }
 }

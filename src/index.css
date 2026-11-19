@@ -30,6 +30,14 @@
   --live-bg: rgba(79, 138, 91, 0.06);
   --live-border: rgba(79, 138, 91, 0.35);
 
+  /* The study table beside the timer: warm wood, lamps lit while studying. */
+  --table: #e9dcc2;
+  --table-edge: #d8c8a6;
+  --lamp-off: #cdbf9f;
+  --lamp-on: #f3d58a;
+  --lamp-halo: rgba(243, 213, 138, 0.35);
+  --lamp-glow: rgba(243, 213, 138, 0.5);
+
   /* Type stacks */
   --sans: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', system-ui,
     sans-serif;
@@ -71,6 +79,13 @@
     --live: #7fbf8a;
     --live-bg: rgba(127, 191, 138, 0.07);
     --live-border: rgba(127, 191, 138, 0.35);
+
+    --table: #3a3226;
+    --table-edge: #4a4030;
+    --lamp-off: #5c523f;
+    --lamp-on: #f3d58a;
+    --lamp-halo: rgba(243, 213, 138, 0.25);
+    --lamp-glow: rgba(243, 213, 138, 0.35);
   }
 }
 

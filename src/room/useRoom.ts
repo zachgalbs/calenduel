@@ -37,26 +37,6 @@ export function roomLink(code: string): string {
   return `${window.location.origin}/?room=${code}`
 }
 
-// 1:05:09, the way the timer shows a running session.
-export function clock(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const h = Math.floor(s / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  return `${h > 0 ? `${h}:` : ''}${String(m).padStart(h > 0 ? 2 : 1, '0')}:${String(sec).padStart(2, '0')}`
-}
-
-// A ticking clock, only while something on screen is live.
-export function useNow(active: boolean): number {
-  const [now, setNow] = useState(() => Date.now())
-  useEffect(() => {
-    if (!active) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [active])
-  return now
-}
-
 // Keeps you present in the room (with your running session's start time, or
 // null) and polls who else is there. Network failures are retried quietly; a
 // lasting error is reported.
@@ -114,9 +94,4 @@ export function useRoom(code: string, studyingSince: number | null) {
   }, [beat, load])
 
   return { state, error, beatFailing, reload: load }
-}
-
-// A member's time in this room, counting a session running now.
-export function memberMs(m: { bankedMs: number; liveSince: number | null }, now: number): number {
-  return m.bankedMs + (m.liveSince !== null ? Math.max(0, now - m.liveSince) : 0)
 }

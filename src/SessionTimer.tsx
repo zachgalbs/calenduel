@@ -14,7 +14,7 @@ import {
   writeActive,
   type ActiveSession,
 } from './session/activeSession'
-import RoomPanel from './room/RoomPanel'
+import RoomPanel, { SoloTable } from './room/RoomPanel'
 import RoomInvite from './room/RoomInvite'
 import { roomLink } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
@@ -265,19 +265,6 @@ export default function SessionTimer({
       setTimeout(() => setLinkCopied(false), 2000)
     } catch {
       setNotice(`Couldn't copy it. The link is ${roomLink(room)}`)
-    }
-  }
-
-  async function handleLeaveRoom() {
-    const code = room
-    onRoomChange(null)
-    setJoinedRoom(null)
-    if (!code) return
-    try {
-      const { leaveRoom } = await import('./compete/api')
-      await leaveRoom(code)
-    } catch {
-      // Gone here already; the room shows you as away soon after.
     }
   }
 
@@ -554,12 +541,13 @@ export default function SessionTimer({
       {notice && <p className="session-notice" role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
 
-      {inRoom && room && (
+      {inRoom && room ? (
         <RoomPanel
           code={room}
           studyingSince={status === 'running' && !paused ? stretchFrom : null}
-          onLeave={handleLeaveRoom}
         />
+      ) : (
+        status === 'running' && <SoloTable studying={!paused} />
       )}
     </section>
   )
