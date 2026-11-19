@@ -3,6 +3,7 @@ import SessionTimer from './SessionTimer'
 import History from './History'
 import Account from './account/Account'
 import { roomFromUrl, saveRoom, savedRoom } from './room/useRoom'
+import { useAnswerSessionLink } from './room/sessionLink'
 import './App.css'
 
 // The auth and database SDK is big and only competition features use it, so
@@ -60,7 +61,23 @@ function App() {
   // Set by the lobby's Start studying click: the timer starts on arrival, while
   // that click still counts as the gesture the screen picker needs.
   const [autoStart, setAutoStart] = useState(false)
+  // When a running session was brought into the room from another tab: the
+  // room counts its time from then, not from the session's start.
+  const [roomJoinedAt, setRoomJoinedAt] = useState<number | null>(null)
   const shownPage = page === 'room' && !room ? 'compete' : page
+
+  // A group study link opened in another tab can bring this tab's running
+  // session into the room. The other tab has already joined; switching from a
+  // different room leaves that one, like its Leave button.
+  useAnswerSessionLink(sessionActive, room, (code) => {
+    if (room && room !== code) {
+      import('./compete/api')
+        .then(({ leaveRoom }) => leaveRoom(room))
+        .catch(console.error)
+    }
+    if (room !== code) setRoomJoinedAt(Date.now())
+    setRoom(code)
+  })
 
   useEffect(() => {
     saveRoom(room)
@@ -131,6 +148,7 @@ function App() {
       {shownPage === 'timer' && (
         <SessionTimer
           room={room}
+          roomJoinedAt={roomJoinedAt}
           autoStart={autoStart}
           onAutoStarted={() => setAutoStart(false)}
           onLeaveRoom={() => setRoom(null)}

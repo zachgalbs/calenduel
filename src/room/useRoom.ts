@@ -60,7 +60,11 @@ export function useNow(active: boolean): number {
 // Keeps you present in the room (with your running session's start time, or
 // null) and polls who else is there. Network failures are retried quietly; a
 // lasting error is reported.
-export function useRoom(code: string, studyingSince: number | null) {
+//
+// present = false only watches. Presence is per person, not per tab, so a tab
+// must stay quiet while another tab's session speaks for you: two tabs saying
+// different things would keep reopening your stretch and count it twice.
+export function useRoom(code: string, studyingSince: number | null, present = true) {
   const [state, setState] = useState<RoomState | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Two beats in a row failed: the others can't see you. Said out loud, since
@@ -96,22 +100,26 @@ export function useRoom(code: string, studyingSince: number | null) {
   useEffect(() => {
     studyingRef.current = studyingSince
     // eslint-disable-next-line react-hooks/set-state-in-effect -- presence sync, not derived state
-    void beat().then(load)
-  }, [studyingSince, beat, load])
+    void (present ? beat() : Promise.resolve()).then(load)
+  }, [studyingSince, present, beat, load])
 
   useEffect(() => {
+    if (!present) return
     const beats = setInterval(() => void beat(), BEAT_MS)
+    return () => clearInterval(beats)
+  }, [present, beat])
+
+  useEffect(() => {
     const polls = setInterval(() => void load(), POLL_MS)
     const onVisible = () => {
       if (document.visibilityState === 'visible') void load()
     }
     document.addEventListener('visibilitychange', onVisible)
     return () => {
-      clearInterval(beats)
       clearInterval(polls)
       document.removeEventListener('visibilitychange', onVisible)
     }
-  }, [beat, load])
+  }, [load])
 
   return { state, error, beatFailing, reload: load }
 }

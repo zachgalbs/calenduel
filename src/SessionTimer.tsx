@@ -43,6 +43,7 @@ function describe(e: unknown): string {
 
 export default function SessionTimer({
   room = null,
+  roomJoinedAt = null,
   autoStart = false,
   onAutoStarted,
   onLeaveRoom,
@@ -51,6 +52,8 @@ export default function SessionTimer({
 }: {
   // The group study this session belongs to, shown beside the timer.
   room?: string | null
+  // Set when this running session joined the room partway through.
+  roomJoinedAt?: number | null
   // Start straight away: the lobby's Start studying click brought us here.
   autoStart?: boolean
   onAutoStarted?: () => void
@@ -452,7 +455,11 @@ export default function SessionTimer({
       {room && (
         <RoomPanel
           code={room}
-          studyingSince={status === 'running' && !paused ? stretchFrom : null}
+          studyingSince={
+            status === 'running' && !paused && stretchFrom !== null
+              ? Math.max(stretchFrom, roomJoinedAt ?? 0)
+              : null
+          }
           onLeave={() => onLeaveRoom?.()}
         />
       )}

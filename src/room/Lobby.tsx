@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import type { RoomPreview } from '../compete/api'
 import Members from './Members'
 import { roomLink, useNow, useRoom } from './useRoom'
+import { useOtherSession } from './sessionLink'
 import './Room.css'
 
 function errorText(err: unknown): string {
@@ -17,10 +18,15 @@ type Props = { code: string; onStudy: () => void; onLeave: () => void }
 // The lobby of a group study: copy the link, watch people arrive, and (host)
 // start it. Once started, everyone gets a Start studying button: each person's
 // own click, since the browser only lets a click share a screen.
+//
+// Already studying in another tab? Then that session joins instead, and this
+// tab only watches (see sessionLink.ts).
 function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
-  const { state, error, beatFailing } = useRoom(code, null)
+  const { other, join } = useOtherSession()
+  const { state, error, beatFailing } = useRoom(code, null, other === null)
   const [copied, setCopied] = useState(false)
   const [starting, setStarting] = useState(false)
+  const [adding, setAdding] = useState(false)
   const [actionError, setActionError] = useState<string | null>(null)
   const live = state?.members.some((m) => m.liveSince !== null) ?? false
   const now = useNow(live)
@@ -50,6 +56,27 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
     } catch (err) {
       setActionError(errorText(err))
       setStarting(false)
+    }
+  }
+
+  // The host can start the group study with this same click.
+  async function handleAddSession() {
+    setActionError(null)
+    setAdding(true)
+    try {
+      if (isHost && !started) {
+        const { startRoom } = await import('../compete/api')
+        await startRoom(code)
+      }
+      if (!(await join(code))) {
+        setActionError(
+          "Couldn't reach your session's tab. Switch to it and back, then try again.",
+        )
+      }
+    } catch (err) {
+      setActionError(errorText(err))
+    } finally {
+      setAdding(false)
     }
   }
 
@@ -96,7 +123,34 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
       {state && <Members members={state.members} myId={myId} now={now} />}
 
       <div className="room-cta">
-        {!started && isHost && (
+        {other && other.room === code && (
+          <p className="room-note">
+            Your session in another tab is part of this group study. You can close
+            this tab.
+          </p>
+        )}
+        {other && other.room !== code && (
+          <>
+            <button
+              type="button"
+              className="room-btn big primary"
+              onClick={handleAddSession}
+              disabled={adding}
+            >
+              {adding
+                ? 'Adding...'
+                : isHost && !started
+                  ? 'Start with my running session'
+                  : 'Add my running session'}
+            </button>
+            <p className="room-note">
+              You're already studying in another tab, so that session joins rather
+              than starting a new one. Its time from now on counts here
+              {other.room ? ', and it leaves the group study it was in' : ''}.
+            </p>
+          </>
+        )}
+        {!other && !started && isHost && (
           <>
             <button
               type="button"
@@ -112,13 +166,13 @@ function LobbyRoom({ code, myId, onStudy, onLeave }: Props & { myId: string }) {
             </p>
           </>
         )}
-        {!started && !isHost && state && (
+        {!other && !started && !isHost && state && (
           <p className="room-waiting">
             <span className="room-waiting-dot" aria-hidden="true" />
             Waiting for {state.hostName} to start
           </p>
         )}
-        {started && (
+        {!other && started && (
           <>
             <button type="button" className="room-btn big primary" onClick={onStudy}>
               Start studying
