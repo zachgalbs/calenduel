@@ -75,3 +75,24 @@
   background: var(--live);
   vertical-align: 1px;
 }
+
+/* A page whose files a deploy replaced (see PageBoundary.tsx). */
+.page-failed {
+  max-width: 34rem;
+  margin: 3rem auto 0;
+  padding: 0 1.5rem;
+  color: var(--text);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.page-failed button {
+  font: inherit;
+  margin-top: 0.75rem;
+  padding: 0.45rem 1rem;
+  color: var(--text-h);
+  background: var(--accent-bg);
+  border: 1px solid var(--accent-border);
+  border-radius: 999px;
+  cursor: pointer;
+}

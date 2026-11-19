@@ -2,6 +2,7 @@ import { lazy, Suspense, useEffect, useState } from 'react'
 import SessionTimer from './SessionTimer'
 import History from './History'
 import Account from './account/Account'
+import PageBoundary from './PageBoundary'
 import { roomFromUrl, saveRoom, savedRoom } from './room/useRoom'
 import { useAnswerSessionLink } from './room/sessionLink'
 import './App.css'
@@ -167,31 +168,35 @@ function App() {
       {shownPage === 'history' && <History key={historyKey} />}
 
       {shownPage === 'room' && room && (
-        <Suspense fallback={null}>
-          <Lobby
-            code={room}
-            onStudy={() => {
-              setAutoStart(true)
-              setPage('timer')
-            }}
-            onLeave={() => {
-              setRoom(null)
-              setPage('compete')
-            }}
-          />
-        </Suspense>
+        <PageBoundary>
+          <Suspense fallback={null}>
+            <Lobby
+              code={room}
+              onStudy={() => {
+                setAutoStart(true)
+                setPage('timer')
+              }}
+              onLeave={() => {
+                setRoom(null)
+                setPage('compete')
+              }}
+            />
+          </Suspense>
+        </PageBoundary>
       )}
 
       {shownPage === 'compete' && (
-        <Suspense fallback={null}>
-          <Compete
-            room={room}
-            onOpenRoom={(code) => {
-              setRoom(code)
-              setPage('room')
-            }}
-          />
-        </Suspense>
+        <PageBoundary>
+          <Suspense fallback={null}>
+            <Compete
+              room={room}
+              onOpenRoom={(code) => {
+                setRoom(code)
+                setPage('room')
+              }}
+            />
+          </Suspense>
+        </PageBoundary>
       )}
 
       {shownPage === 'account' && <Account />}

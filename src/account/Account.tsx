@@ -1,4 +1,5 @@
 import { lazy, Suspense, useEffect, useState } from 'react'
+import PageBoundary from '../PageBoundary'
 import { listSessions } from '../db'
 import { formatStudyTime, localDay } from '../compete/stats'
 import { ACTIVITY_WEEKS, studyStats, type DayActivity, type StudyStats } from './stats'
@@ -88,9 +89,11 @@ export default function Account() {
     <main className="account">
       <h1>Account</h1>
 
-      <Suspense fallback={null}>
-        <ProfileSection />
-      </Suspense>
+      <PageBoundary>
+        <Suspense fallback={null}>
+          <ProfileSection />
+        </Suspense>
+      </PageBoundary>
 
       <section className="account-section">
         <h2>Stats</h2>
@@ -106,9 +109,11 @@ export default function Account() {
         <SubjectTally />
       </section>
 
-      <Suspense fallback={null}>
-        <FeedbackSection />
-      </Suspense>
+      <PageBoundary>
+        <Suspense fallback={null}>
+          <FeedbackSection />
+        </Suspense>
+      </PageBoundary>
     </main>
   )
 }
