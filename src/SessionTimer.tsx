@@ -16,7 +16,6 @@ import {
 } from './session/activeSession'
 import RoomPanel, { SoloTable } from './room/RoomPanel'
 import RoomInvite from './room/RoomInvite'
-import { roomLink } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
 import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
 
@@ -102,7 +101,6 @@ export default function SessionTimer({
   const [joinedRoom, setJoinedRoom] = useState<string | null>(null)
   const inRoom = room !== null && joinedRoom === room
   const still = useStill(status === 'running')
-  const [linkCopied, setLinkCopied] = useState(false)
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
   // Optional, and never required to start: Start stays one click. It can be
@@ -280,17 +278,6 @@ export default function SessionTimer({
       onRoomChange(code)
       setJoinedRoom(code)
     })().catch((err) => console.error('study room failed', err))
-  }
-
-  async function handleCopyLink() {
-    if (!room) return
-    try {
-      await navigator.clipboard.writeText(roomLink(room))
-      setLinkCopied(true)
-      setTimeout(() => setLinkCopied(false), 2000)
-    } catch {
-      setNotice(`Couldn't copy it. The link is ${roomLink(room)}`)
-    }
   }
 
   function handleResume() {
@@ -496,12 +483,6 @@ export default function SessionTimer({
           </button>
         )}
 
-        {/* The page's own URL works too; this is for when the nav is hidden. */}
-        {status === 'running' && inRoom && (
-          <button type="button" className="session-link" onClick={handleCopyLink}>
-            {linkCopied ? 'Link copied' : 'Copy invite link'}
-          </button>
-        )}
 
         {status === 'encoding' && (
           <button type="button" className="session-stop" disabled>

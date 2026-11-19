@@ -33,10 +33,6 @@ export function saveRoom(code: string | null): void {
   }
 }
 
-export function roomLink(code: string): string {
-  return `${window.location.origin}/?room=${code}`
-}
-
 // Keeps you present in the room (with your running session's start time, or
 // null) and polls who else is there. Network failures are retried quietly; a
 // lasting error is reported.
