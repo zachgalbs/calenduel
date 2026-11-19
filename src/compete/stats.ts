@@ -183,6 +183,35 @@ export function headToHead(
   }
 }
 
+// A session running right now (see live_times in db/migrations/012).
+export interface LiveSession {
+  userId: string
+  since: number // the start, moved later by finished breaks
+  frozenAt: number | null // when the clock stopped; null while studying
+  // The day it will be filed under once it's uploaded. Null from a tab still
+  // on the code before live time: it gets the dot, but no time.
+  day: string | null
+}
+
+export function liveMs(s: LiveSession, now: number): number {
+  return Math.max(0, (s.frozenAt ?? now) - s.since)
+}
+
+// The totals with running sessions added in, so a session counts while it
+// runs. It isn't in the totals yet: a session only uploads once it's stopped,
+// and its live row goes away after that upload.
+export function withLive(totals: DailyTotal[], live: LiveSession[], now: number): DailyTotal[] {
+  const out = totals.map((t) => ({ ...t }))
+  for (const s of live) {
+    const ms = liveMs(s, now)
+    if (ms <= 0 || s.day === null) continue
+    const row = out.find((t) => t.userId === s.userId && t.day === s.day)
+    if (row) row.totalMs += ms
+    else out.push({ userId: s.userId, day: s.day, totalMs: ms, focusMs: 0, analyzedMs: 0 })
+  }
+  return out
+}
+
 // "1h 05m", "12m", or "0m".
 export function formatStudyTime(ms: number): string {
   const totalMin = Math.floor(ms / 60_000)

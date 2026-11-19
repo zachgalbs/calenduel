@@ -4,7 +4,7 @@ import Stopwatch from './Stopwatch'
 import { useTimelapseRecorder } from './session/useTimelapseRecorder'
 import { downloadBlob, timelapseName } from './media/share'
 import { DEFAULT_SESSION_NAME, SESSION_NAME_MAX, saveSession } from './db'
-import { formatStudyTime } from './compete/stats'
+import { formatStudyTime, localDay } from './compete/stats'
 import {
   clearActive,
   HEARTBEAT_MS,
@@ -16,7 +16,7 @@ import {
 } from './session/activeSession'
 import RoomPanel from './room/RoomPanel'
 import { sortSessions } from './subjects/sort'
-import { NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
+import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
 
 // File a just-saved session under a subject, in the background.
 function sortIntoSubject() {
@@ -59,11 +59,14 @@ export default function SessionTimer({
   onAutoStarted?: () => void
   onLeaveRoom?: () => void
   onActiveChange: (active: boolean) => void
-  onSessionSaved?: () => void
+  // May return the upload, so friends keep seeing the time until it lands.
+  onSessionSaved?: () => Promise<unknown> | void
 }) {
   const [status, setStatus] = useState<Status>('idle')
   const [startedAt, setStartedAt] = useState<number | null>(null)
   const [stoppedAt, setStoppedAt] = useState<number | null>(null)
+  // The start of a stopped session whose upload is still on its way.
+  const [uploadingFor, setUploadingFor] = useState<number | null>(null)
   const [pause, setPause] = useState<PauseState>(NOT_PAUSED)
   const paused = pause.pausedAt !== null
   // When the current stretch of studying began (the start, or the last resume).
@@ -110,9 +113,23 @@ export default function SessionTimer({
     onActiveChange(inProgress)
   }, [inProgress, onActiveChange])
 
-  // The green dot friends see on Compete while this session runs. Off during
-  // a break: the dot means studying now.
-  useLiveBeat(status === 'running' && !paused ? startedAt : null)
+  // Friends see this session's time count up on Compete, and the green dot
+  // while not on a break. After Stop the time stays up, frozen, until the
+  // upload lands, so it never drops out of their totals in between.
+  const live =
+    startedAt !== null &&
+    (status === 'running' ||
+      status === 'encoding' ||
+      (status === 'done' && uploadingFor === startedAt))
+  useLiveBeat(
+    live
+      ? {
+          ...liveSpan(startedAt, pause, status === 'running' ? null : stoppedAt),
+          day: localDay(startedAt), // the day the upload is filed under
+          startedAt, // lets the database drop this once the upload exists
+        }
+      : null,
+  )
 
   // While running, keep a record that outlives the page, refreshed on a
   // heartbeat and once more as the page goes away.
@@ -267,7 +284,10 @@ export default function SessionTimer({
     const validClip = saved && recorded && recorded.size > 0 ? recorded : null
     if (saved) {
       clearActive()
-      onSessionSaved?.()
+      setUploadingFor(startedAt)
+      void Promise.resolve(onSessionSaved?.()).finally(() =>
+        setUploadingFor((s) => (s === startedAt ? null : s)),
+      )
     }
     setClip(validClip)
     if (!saved) {

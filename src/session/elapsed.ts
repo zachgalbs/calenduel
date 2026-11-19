@@ -16,3 +16,15 @@ export function pausedUntil(pause: PauseState, at: number): number {
 export function studiedMs(startedAt: number, at: number, pause: PauseState): number {
   return Math.max(0, at - startedAt - pausedUntil(pause, at))
 }
+
+// What the live beat sends (see db/migrations/012): a start moved later by the
+// finished breaks, so that (now - since) is the time studied, and the moment
+// the clock stopped, if it has (a break, or Stop). Either way,
+// (frozenAt ?? now) - since equals studiedMs.
+export function liveSpan(
+  startedAt: number,
+  pause: PauseState,
+  stoppedAt: number | null,
+): { since: number; frozenAt: number | null } {
+  return { since: startedAt + pause.pausedMs, frozenAt: pause.pausedAt ?? stoppedAt }
+}

@@ -5,7 +5,7 @@
 import { createClient } from '@neondatabase/neon-js'
 import { listSessions, type SessionMeta } from '../db'
 import { summarizeFocus } from '../focus/types'
-import { localDay, type DailyTotal } from './stats'
+import { localDay, type DailyTotal, type LiveSession } from './stats'
 
 const neon = createClient({
   auth: { url: import.meta.env.VITE_NEON_AUTH_URL },
@@ -225,20 +225,43 @@ export async function leaveRoom(code: string): Promise<void> {
   if (error) fail(error)
 }
 
-// "I'm in a session that started at studyingSince" (null: not anymore).
-// Friends see a green dot on Compete while the last beat is under 90 s old.
-export async function liveBeat(studyingSince: number | null): Promise<void> {
+// "I'm in a session" (see db/migrations/012), or null: not anymore. Friends
+// see the time count up on Compete, and the green dot while it isn't frozen.
+export interface LiveBeat {
+  since: number
+  frozenAt: number | null
+  day: string
+  startedAt: number
+}
+
+export async function liveBeat(beat: LiveBeat | null): Promise<void> {
+  const iso = (ms: number | null) => (ms === null ? null : new Date(ms).toISOString())
   const { error } = await neon.rpc('live_beat', {
-    studying: studyingSince === null ? null : new Date(studyingSince).toISOString(),
+    studying: iso(beat?.since ?? null),
+    frozen: iso(beat?.frozenAt ?? null),
+    on_day: beat?.day ?? null,
+    started: iso(beat?.startedAt ?? null),
   })
   if (error) fail(error)
 }
 
-// Ids of you and your friends who are in a session right now.
-export async function studyingNow(): Promise<Set<string>> {
-  const { data, error } = await neon.rpc('studying_now')
+// You and your friends in a session right now, with how far each has got.
+export async function liveTimes(): Promise<LiveSession[]> {
+  const { data, error } = await neon.rpc('live_times')
   if (error) fail(error)
-  return new Set((data as { user_id: string }[]).map((r) => r.user_id))
+  return (
+    data as {
+      user_id: string
+      studying_since: string
+      frozen_at: string | null
+      day: string | null
+    }[]
+  ).map((r) => ({
+    userId: r.user_id,
+    since: Date.parse(r.studying_since),
+    frozenAt: r.frozen_at === null ? null : Date.parse(r.frozen_at),
+    day: r.day,
+  }))
 }
 
 export async function removeFriend(friendId: string): Promise<void> {

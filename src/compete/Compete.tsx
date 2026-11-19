@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
 import {
   addFriend,
   createRoom,
@@ -8,7 +8,7 @@ import {
   FRIEND_SESSION_LIMIT,
   isSignedIn,
   listFriends,
-  studyingNow,
+  liveTimes,
   removeFriend,
   signIn,
   signOut,
@@ -23,7 +23,9 @@ import {
   formatStudyTime,
   headToHead,
   localDay,
+  withLive,
   type DailyTotal,
+  type LiveSession,
 } from './stats'
 import Avatar from '../Avatar'
 import Experimental from '../focus/Experimental'
@@ -32,6 +34,8 @@ import './Compete.css'
 const REFRESH_MS = 60_000
 // Who's studying right now is re-read more often than the scores.
 const LIVE_MS = 20_000
+// Running sessions count up between those reads.
+const TICK_MS = 1_000
 
 function LiveDot({ on }: { on: boolean }) {
   return on ? <span className="live-dot" role="img" aria-label="studying now" title="Studying now" /> : null
@@ -415,7 +419,32 @@ export default function Compete({
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [board, setBoard] = useState<Board | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [live, setLive] = useState<Set<string>>(() => new Set())
+  // Sessions running right now, and the clock their time is counted to.
+  const [live, setLive] = useState<LiveSession[]>([])
+  const [now, setNow] = useState(() => Date.now())
+  const liveIdsRef = useRef<Set<string>>(new Set())
+
+  // A failed read keeps the last answer: live time is a nicety, and the
+  // session counts for real once it's uploaded.
+  const fetchLive = useCallback(async (): Promise<LiveSession[] | null> => {
+    try {
+      return await liveTimes()
+    } catch (err) {
+      console.error('live status failed', err)
+      return null
+    }
+  }, [])
+
+  // Someone dropping out of the live list means their session stopped and
+  // uploaded (or was dropped), so the totals need reading again to take it in.
+  const showLive = useCallback((rows: LiveSession[]): boolean => {
+    const ids = new Set(rows.map((r) => r.userId))
+    const ended = [...liveIdsRef.current].some((id) => !ids.has(id))
+    liveIdsRef.current = ids
+    setLive(rows)
+    setNow(Date.now())
+    return ended
+  }, [])
 
   const refresh = useCallback(async () => {
     try {
@@ -424,17 +453,29 @@ export default function Compete({
       if (!active) return
       // Upload first, so your own numbers on this page are never behind.
       const failedUploads = await syncSessions()
-      const [profile, friends, totals] = await Promise.all([
+      // Live, totals, live again. An upload that lands in between takes its
+      // session out of the second live read, so if anyone left, the totals
+      // are read once more. That way the two always agree: a session is in
+      // the totals or in the live list, never both and never neither.
+      const before = await fetchLive()
+      const [profile, friends, firstTotals] = await Promise.all([
         ensureProfile(),
         listFriends(),
         fetchDailyTotals(),
       ])
+      let totals = firstTotals
+      const after = await fetchLive()
+      const ids = new Set(after?.map((r) => r.userId))
+      if (before && after && before.some((r) => !ids.has(r.userId))) {
+        totals = await fetchDailyTotals()
+      }
       setBoard({ profile, friends, totals, failedUploads, today: localDay(Date.now()) })
+      if (after) showLive(after)
       setError(null)
     } catch (err) {
       setError(errorText(err))
     }
-  }, [])
+  }, [fetchLive, showLive])
 
   // Keeps the scoreboard current without a realtime connection: refresh on open,
   // on returning to the tab, and once a minute while it's actually being viewed.
@@ -456,28 +497,30 @@ export default function Compete({
     }
   }, [refresh])
 
-  // The green dots. A failed read keeps the last answer: dots are a nicety.
+  // Between full refreshes, who's in a session is re-read on its own.
   const signedInNow = signedIn === true
   useEffect(() => {
     if (!signedInNow) return
-    let closed = false
     const read = () => {
       if (document.visibilityState !== 'visible') return
-      studyingNow()
-        .then((ids) => {
-          if (!closed) setLive(ids)
-        })
-        .catch((err) => console.error('live status failed', err))
+      void fetchLive().then((rows) => {
+        if (rows && showLive(rows)) void refresh()
+      })
     }
-    read()
     const timer = setInterval(read, LIVE_MS)
     document.addEventListener('visibilitychange', read)
     return () => {
-      closed = true
       clearInterval(timer)
       document.removeEventListener('visibilitychange', read)
     }
-  }, [signedInNow])
+  }, [signedInNow, fetchLive, showLive, refresh])
+
+  const ticking = live.some((s) => s.frozenAt === null)
+  useEffect(() => {
+    if (!ticking) return
+    const timer = setInterval(() => setNow(Date.now()), TICK_MS)
+    return () => clearInterval(timer)
+  }, [ticking])
 
   async function handleSignIn() {
     setError(null)
@@ -499,9 +542,12 @@ export default function Compete({
     }
   }
 
+  // The green dot: in a session and not on a break.
+  const studying = new Set(live.filter((s) => s.frozenAt === null).map((s) => s.userId))
+  const totals = board ? withLive(board.totals, live, now) : []
   const standings = board
     ? dailyStandings(
-        board.totals,
+        totals,
         [{ id: board.profile.id, name: board.profile.name }, ...board.friends],
         board.today,
       )
@@ -576,7 +622,7 @@ export default function Compete({
                   <Avatar name={s.name} src={avatars.get(s.id) ?? null} />
                   <span className="standing-name">
                     {s.id === board.profile.id ? 'You' : s.name}
-                    <LiveDot on={live.has(s.id)} />
+                    <LiveDot on={studying.has(s.id)} />
                   </span>
                   <span className="standing-time">{formatStudyTime(s.totalMs)}</span>
                   <span
@@ -592,7 +638,7 @@ export default function Compete({
               ))}
             </ol>
             <p className="compete-note">
-              Sessions count once you press Stop, toward the day they started.
+              Sessions count while they run, toward the day they started.
               Focus counts the sessions you analyze on the Sessions page, and the
               percentage is out of that analyzed time. It doesn't decide who wins.
             </p>
@@ -607,9 +653,9 @@ export default function Compete({
                     key={f.id}
                     friend={f}
                     me={board.profile}
-                    totals={board.totals}
+                    totals={totals}
                     today={board.today}
-                    live={live.has(f.id)}
+                    live={studying.has(f.id)}
                     onRemoved={refresh}
                   />
                 ))}

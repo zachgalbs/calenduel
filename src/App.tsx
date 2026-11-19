@@ -157,8 +157,9 @@ function App() {
           onSessionSaved={() => {
             setHistoryKey((k) => k + 1)
             // Best effort: the session is safe locally, and opening Compete
-            // retries anything that didn't make it up.
-            import('./compete/api')
+            // retries anything that didn't make it up. Returned, so the timer
+            // knows when its live time can make way for the uploaded one.
+            return import('./compete/api')
               .then(({ syncSessions }) => syncSessions())
               .catch(console.error)
           }}

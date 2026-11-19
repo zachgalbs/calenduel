@@ -7,7 +7,9 @@ import {
   formatStudyTime,
   headToHead,
   localDay,
+  withLive,
   type DailyTotal,
+  type LiveSession,
 } from './stats'
 
 const TODAY = '2026-11-09'
@@ -219,5 +221,59 @@ describe('formatStudyTime', () => {
     expect(formatStudyTime(59_999)).toBe('0m')
     expect(formatStudyTime(12 * 60_000)).toBe('12m')
     expect(formatStudyTime(65 * 60_000)).toBe('1h 05m')
+  })
+})
+
+describe('withLive', () => {
+  const live = (userId: string, day: string, since: number, frozenAt: number | null = null): LiveSession =>
+    ({ userId, day, since, frozenAt })
+  const NOW = 100 * MIN
+
+  it('adds a running session to that day', () => {
+    const out = withLive([total('me', TODAY, 30 * MIN)], [live('me', TODAY, NOW - 20 * MIN)], NOW)
+    expect(out).toEqual([total('me', TODAY, 50 * MIN)])
+  })
+
+  it('gives a first session of the day its own row, with no focus', () => {
+    const out = withLive([], [live('zach', TODAY, NOW - 5 * MIN)], NOW)
+    expect(out).toEqual([{ userId: 'zach', day: TODAY, totalMs: 5 * MIN, focusMs: 0, analyzedMs: 0 }])
+  })
+
+  it('stops counting while frozen', () => {
+    const s = live('me', TODAY, NOW - 20 * MIN, NOW - 15 * MIN)
+    expect(withLive([], [s], NOW)[0].totalMs).toBe(5 * MIN)
+    expect(withLive([], [s], NOW + 60 * MIN)[0].totalMs).toBe(5 * MIN)
+  })
+
+  it('files it under its own day, which can be yesterday after midnight', () => {
+    const yesterday = addDays(TODAY, -1)
+    const out = withLive([total('me', TODAY, MIN)], [live('me', yesterday, NOW - 10 * MIN)], NOW)
+    expect(dailyStandings(out, [{ id: 'me', name: 'Me' }], TODAY)[0].totalMs).toBe(MIN)
+    expect(out.find((t) => t.day === yesterday)?.totalMs).toBe(10 * MIN)
+  })
+
+  it('leaves the totals it was given alone, and keeps focus untouched', () => {
+    const totals = [total('me', TODAY, 30 * MIN, 20 * MIN)]
+    const out = withLive(totals, [live('me', TODAY, NOW - 10 * MIN)], NOW)
+    expect(totals[0].totalMs).toBe(30 * MIN)
+    expect(out[0]).toMatchObject({ totalMs: 40 * MIN, focusMs: 20 * MIN, analyzedMs: 30 * MIN })
+  })
+
+  it('can change who leads today', () => {
+    const out = withLive(
+      [total('me', TODAY, 60 * MIN), total('zach', TODAY, 50 * MIN)],
+      [live('zach', TODAY, NOW - 15 * MIN)],
+      NOW,
+    )
+    const people = [{ id: 'me', name: 'Me' }, { id: 'zach', name: 'Zach' }]
+    expect(dailyStandings(out, people, TODAY).map((s) => s.id)).toEqual(['zach', 'me'])
+  })
+
+  it('counts no time for a tab still on the old code', () => {
+    expect(withLive([], [{ userId: 'me', day: null, since: NOW - MIN, frozenAt: null }], NOW)).toEqual([])
+  })
+
+  it('ignores a clock that hasn\'t started yet', () => {
+    expect(withLive([], [live('me', TODAY, NOW + MIN)], NOW)).toEqual([])
   })
 })
