@@ -449,7 +449,11 @@ export default function SessionTimer({
           value={name}
           onChange={(e) => setName(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
+            if (e.key !== 'Enter') return
+            e.currentTarget.blur()
+            // Name it, press Enter, you're studying. The key press is the
+            // gesture the screen picker needs, as a click on Start would be.
+            if (status === 'idle') void handleStart()
           }}
           readOnly={status === 'encoding' || status === 'done'}
         />
