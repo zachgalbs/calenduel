@@ -265,6 +265,53 @@
   opacity: 0.85;
 }
 
+/* Small subjects lie flat in a pile at the end of the shelf. */
+.shelf-pile {
+  flex: none;
+  align-self: flex-end;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: flex-start;
+  gap: 2px;
+  margin-left: 10px;
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  transition: transform 0.45s cubic-bezier(0.3, 0.7, 0.2, 1);
+}
+
+.shelf-pile:hover {
+  transform: translateY(-3px);
+}
+
+.shelf-pile[data-open='true'] {
+  transform: translateY(-10px);
+}
+
+.shelf-pile:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.shelf-flat {
+  display: block;
+  height: 9px;
+  border-radius: 2px;
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, 0.12);
+}
+
+.shelf-flat[data-unsorted='true'] {
+  background: var(--code-bg);
+  box-shadow: inset 0 0 0 1px var(--border-strong);
+}
+
+.book-subject {
+  font-size: 12px;
+  color: var(--text);
+  white-space: nowrap;
+}
+
 .shelf-board {
   height: 14px;
   border-radius: 3px;

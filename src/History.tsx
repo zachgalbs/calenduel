@@ -14,7 +14,15 @@ import SubjectField, { SubjectOptions } from './subjects/SubjectField'
 import RecheckAll from './focus/RecheckAll' // one-time, 2026-11-13
 import { SUBJECTS_CHANGED, savedNames, sortSessions } from './subjects/sort'
 import { knownSubjects } from './subjects/subjects'
-import { UNSORTED, bookSeed, latestBook, shelfBooks, type Book } from './subjects/shelf'
+import {
+  PILE,
+  UNSORTED,
+  bookSeed,
+  latestBook,
+  shelfBooks,
+  splitShelf,
+  type Book,
+} from './subjects/shelf'
 import { addDays, localDay } from './compete/stats'
 
 function formatDate(ms: number): string {
@@ -199,8 +207,9 @@ function whenLabel(ms: number): string {
     : d.toLocaleDateString([], { month: 'short', day: 'numeric' })
 }
 
-function Shelf({ books, open, onOpen }: {
+function Shelf({ books, pile, open, onOpen }: {
   books: Book[]
+  pile: Book[]
   open: string | null
   onOpen: (key: string) => void
 }) {
@@ -208,7 +217,7 @@ function Shelf({ books, open, onOpen }: {
   // Each book its own binding: its usual one if it's free, else the next free.
   const taken = new Set<number>()
   const binding = new Map<string, string>()
-  for (const b of books) {
+  for (const b of [...books, ...pile]) {
     if (b.key === UNSORTED) continue
     let i = bookSeed(b.key) % BINDINGS.length
     for (let n = 0; n < BINDINGS.length && taken.has(i); n++) i = (i + 1) % BINDINGS.length
@@ -243,6 +252,30 @@ function Shelf({ books, open, onOpen }: {
             </button>
           )
         })}
+        {/* The small subjects, lying flat: a pile you open like a book. */}
+        {pile.length > 0 && (
+          <button
+            type="button"
+            className="shelf-pile"
+            data-open={open === PILE}
+            aria-pressed={open === PILE}
+            aria-label={`Everything else: ${pile.map((b) => b.name ?? 'Unsorted').join(', ')}`}
+            onClick={() => onOpen(PILE)}
+          >
+            {pile.slice(0, 7).map((b, i) => (
+              <span
+                key={b.key}
+                className="shelf-flat"
+                data-unsorted={b.key === UNSORTED}
+                style={{
+                  background: binding.get(b.key),
+                  width: 58 + (bookSeed(b.key) % 22),
+                  marginLeft: i % 2 ? 6 : 0,
+                }}
+              />
+            ))}
+          </button>
+        )}
       </div>
       <div className="shelf-board" aria-hidden="true" />
     </div>
@@ -250,10 +283,12 @@ function Shelf({ books, open, onOpen }: {
 }
 
 // A session, folded to one line until you open it.
-function SessionRow({ session, subjects, onChanged }: {
+function SessionRow({ session, subjects, onChanged, subject }: {
   session: SessionMeta
   subjects: string[]
   onChanged: () => void
+  // Shown in the pile, where sessions from several subjects sit together.
+  subject?: string
 }) {
   const [open, setOpen] = useState(false)
   return (
@@ -265,6 +300,7 @@ function SessionRow({ session, subjects, onChanged }: {
         onClick={() => setOpen((o) => !o)}
       >
         <span className="book-name">{session.task}</span>
+        {subject && <span className="book-subject">{subject}</span>}
         <span className="book-when">{whenLabel(session.startedAt)}</span>
         <span className="book-length">{totalTime(session.elapsedMs)}</span>
       </button>
@@ -296,11 +332,29 @@ export default function History() {
     return () => window.removeEventListener(SUBJECTS_CHANGED, refresh)
   }, [refresh])
   const subjects = sessions ? knownSubjects(sessions, savedNames()) : []
-  const books = sessions ? shelfBooks(sessions, subjects) : []
+  const allBooks = sessions ? shelfBooks(sessions, subjects) : []
+  const { standing, pile } = splitShelf(allBooks)
+  // The pile, opened, reads like one more book holding all its sessions.
+  const pileBook: Book | null =
+    pile.length > 0
+      ? {
+          key: PILE,
+          name: 'Everything else',
+          ms: pile.reduce((sum, b) => sum + b.ms, 0),
+          sessions: pile.flatMap((b) => b.sessions).sort((a, b) => b.startedAt - a.startedAt),
+        }
+      : null
+  const subjectFor = new Map(pile.flatMap((b) => b.sessions.map((s) => [s.id, b.name ?? 'Unsorted'] as const)))
   // Opens on the book you studied in last; a choice holds while it exists.
   const [picked, setPicked] = useState<string | null>(null)
-  const openKey = books.some((b) => b.key === picked) ? picked : latestBook(books)
-  const book = books.find((b) => b.key === openKey) ?? null
+  const openable = [...standing, ...(pileBook ? [pileBook] : [])]
+  const latest = latestBook(allBooks)
+  const openKey = openable.some((b) => b.key === picked)
+    ? picked
+    : pile.some((b) => b.key === latest)
+      ? PILE
+      : latest
+  const book = openable.find((b) => b.key === openKey) ?? null
 
   return (
     <main className="history">
@@ -314,7 +368,9 @@ export default function History() {
 
       {sessions !== null && <RecheckAll sessions={sessions} />}
 
-      {books.length > 0 && <Shelf books={books} open={openKey} onOpen={setPicked} />}
+      {allBooks.length > 0 && (
+        <Shelf books={standing} pile={pile} open={openKey} onOpen={setPicked} />
+      )}
 
       {book && (
         <section className="book" aria-label={book.name ?? 'Unsorted'}>
@@ -327,7 +383,13 @@ export default function History() {
           </header>
           <ul className="book-sessions">
             {book.sessions.map((s) => (
-              <SessionRow key={s.id} session={s} subjects={subjects} onChanged={refresh} />
+              <SessionRow
+                key={s.id}
+                session={s}
+                subjects={subjects}
+                onChanged={refresh}
+                subject={book.key === PILE ? subjectFor.get(s.id) : undefined}
+              />
             ))}
           </ul>
         </section>
