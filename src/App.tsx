@@ -13,7 +13,7 @@ const Compete = lazy(() => import('./compete/Compete'))
 const PAGES = ['timer', 'history', 'friends', 'account'] as const
 type Page = (typeof PAGES)[number]
 
-// The tabs the bracket shortcuts step through, left to right.
+// The tabs, in nav order: what 1, 2, 3 open.
 const TAB_ORDER: Page[] = ['timer', 'history', 'friends']
 
 function isPage(value: string | null): value is Page {
@@ -60,22 +60,20 @@ function App() {
   // via onActiveChange.
   const [sessionActive, setSessionActive] = useState(false)
   const [page, setPage] = useState<Page>(initialPage)
-  // Step through the tabs, whenever the nav is showing: Cmd+Shift+[ and ]
-  // (if the browser passes them on; they're its own tab keys) or Ctrl+[ and ]
-  // (which it doesn't use). A modifier, so it works mid-typing too.
+  // 1, 2, 3 open Timer, Sessions, Friends whenever the nav is showing: on
+  // their own outside a text field, or with Option anywhere, mid-typing too.
+  // (Mac browsers keep every Cmd combination for their own tabs.)
   useEffect(() => {
     if (sessionActive) return
     const onKey = (e: KeyboardEvent) => {
-      const step = e.code === 'BracketLeft' ? -1 : e.code === 'BracketRight' ? 1 : 0
-      if (step === 0 || e.altKey) return
-      const cmd = e.metaKey && e.shiftKey && !e.ctrlKey
-      const ctrl = e.ctrlKey && !e.metaKey && !e.shiftKey
-      if (!cmd && !ctrl) return
-      e.preventDefault()
-      setPage((p) => {
-        const i = TAB_ORDER.indexOf(p)
-        return TAB_ORDER[(Math.max(0, i) + step + TAB_ORDER.length) % TAB_ORDER.length]
-      })
+      const tab = TAB_ORDER[['Digit1', 'Digit2', 'Digit3'].indexOf(e.code)]
+      if (!tab || e.metaKey || e.ctrlKey || e.repeat) return
+      const t = e.target as HTMLElement | null
+      const typing =
+        !!t && (t.isContentEditable || ['INPUT', 'TEXTAREA', 'SELECT'].includes(t.tagName))
+      if (!e.altKey && (typing || e.shiftKey)) return
+      e.preventDefault() // so Option+1 doesn't also type ¡
+      setPage(tab)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -112,6 +110,7 @@ function App() {
           <button
             type="button"
             className={page === 'timer' ? 'nav-link active' : 'nav-link'}
+            title="Timer (1)"
             onClick={() => setPage('timer')}
           >
             Timer
@@ -119,6 +118,7 @@ function App() {
           <button
             type="button"
             className={page === 'history' ? 'nav-link active' : 'nav-link'}
+            title="Sessions (2)"
             onClick={() => setPage('history')}
           >
             Sessions
@@ -126,6 +126,7 @@ function App() {
           <button
             type="button"
             className={page === 'friends' ? 'nav-link active' : 'nav-link'}
+            title="Friends (3)"
             onClick={() => setPage('friends')}
           >
             Friends
