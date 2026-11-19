@@ -52,15 +52,15 @@ export function bookSeed(key: string): number {
   return h >>> 0
 }
 
-// Subjects under this share (10%) of all your time don't get a book: they lie flat
-// in a small pile at the end of the shelf, so the books are what you study.
-export const BOOK_SHARE = 0.1
+// A subject needs this much time, all told, to get a book. Less than that and
+// it lies flat in a small pile at the end of the shelf. A fixed amount rather
+// than a share, so a subject never drops off as the others grow.
+export const BOOK_MIN_MS = 60 * 60_000
 export const PILE = '__pile__'
 
-export function splitShelf(books: Book[], share = BOOK_SHARE): { standing: Book[]; pile: Book[] } {
-  const total = books.reduce((sum, b) => sum + b.ms, 0)
-  const standing: Book[] = []
-  const pile: Book[] = []
-  for (const b of books) (total > 0 && b.ms / total < share ? pile : standing).push(b)
-  return { standing, pile }
+export function splitShelf(books: Book[], minMs = BOOK_MIN_MS): { standing: Book[]; pile: Book[] } {
+  const standing = books.filter((b) => b.ms >= minMs)
+  const pile = books.filter((b) => b.ms < minMs)
+  // Nothing has an hour yet: everything stands, rather than an empty shelf.
+  return standing.length > 0 ? { standing, pile } : { standing: books, pile: [] }
 }

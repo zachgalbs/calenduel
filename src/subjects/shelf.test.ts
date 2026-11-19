@@ -54,21 +54,21 @@ describe('bookSeed', () => {
 })
 
 describe('splitShelf', () => {
-  it('lays subjects under 10% of all time flat in the pile', () => {
+  it('gives every subject with an hour its own book, however small its share', () => {
     const books = shelfBooks([
-      s('a', 1, 600, 'Writing'),
-      s('b', 2, 380, 'Math'),
-      s('c', 3, 90, 'Spanish'), // 90 of 1090: under 10%
-      s('d', 4, 20), // unsorted, under 10% too
+      s('a', 1, 6000, 'Writing'),
+      s('b', 2, 75, 'Physics EMF'), // about 1% of the time, still a book
+      s('c', 3, 42, 'Leetcode'), // under an hour: the pile
+      s('d', 4, 20), // unsorted, under an hour too
     ])
     const { standing, pile } = splitShelf(books)
-    expect(standing.map((b) => b.name)).toEqual(['Writing', 'Math'])
-    expect(pile.map((b) => b.name)).toEqual(['Spanish', null])
+    expect(standing.map((b) => b.name)).toEqual(['Writing', 'Physics EMF'])
+    expect(pile.map((b) => b.name)).toEqual(['Leetcode', null])
   })
 
-  it('keeps a lone subject standing, however little time it has', () => {
-    const { standing, pile } = splitShelf(shelfBooks([s('a', 1, 5, 'Math')]))
-    expect(standing).toHaveLength(1)
+  it('stands everything up while nothing has an hour yet', () => {
+    const { standing, pile } = splitShelf(shelfBooks([s('a', 1, 30, 'Math'), s('b', 2, 10, 'Art')]))
+    expect(standing).toHaveLength(2)
     expect(pile).toHaveLength(0)
   })
 })
