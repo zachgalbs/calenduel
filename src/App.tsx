@@ -18,8 +18,9 @@ function isPage(value: string | null): value is Page {
 }
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
-// Invite links land on Friends and study room links on the timer, ready to
-// join; the return trip from Google sign-in keeps the tab it left from.
+// Study room links land on the timer, ready to join (old ?invite= links, from
+// before friends came only from studying together, land on Friends); the
+// return trip from Google sign-in keeps the tab it left from.
 // ?tab=compete is the page's old name, still in older links and bookmarks.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)

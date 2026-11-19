@@ -122,12 +122,6 @@ export async function listFriends(): Promise<Friend[]> {
   }))
 }
 
-export async function addFriend(code: string): Promise<string> {
-  const { data, error } = await neon.rpc('add_friend', { code })
-  if (error) fail(error)
-  return data as string
-}
-
 // Study rooms (db/migrations/010, 012): every signed-in session is in one, and
 // friends can join it.
 export interface RoomPreview {

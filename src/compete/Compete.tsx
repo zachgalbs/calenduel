@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useRef, useState, type FormEvent } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
-  addFriend,
   ensureProfile,
   fetchDailyTotals,
   fetchFriendSessions,
@@ -287,99 +286,6 @@ function FriendRow({
   )
 }
 
-function InviteForm({
-  inviteCode,
-  onAdded,
-  first = false,
-}: {
-  inviteCode: string
-  onAdded: () => void
-  // No friends yet: this is the whole point of the page, so it says so.
-  first?: boolean
-}) {
-  // An invite link fills in the code but doesn't act on it: connecting shares
-  // your daily totals, so that should take a click, not just following a link.
-  const [code, setCode] = useState(
-    () => new URLSearchParams(window.location.search).get('invite') ?? '',
-  )
-  const [message, setMessage] = useState<string | null>(null)
-  const [error, setError] = useState<string | null>(null)
-  const [copied, setCopied] = useState(false)
-  const [adding, setAdding] = useState(false)
-
-  async function handleCopy() {
-    setError(null)
-    try {
-      await navigator.clipboard.writeText(
-        `${window.location.origin}/?invite=${inviteCode}`,
-      )
-      setCopied(true)
-      setTimeout(() => setCopied(false), 2000)
-    } catch {
-      setError(`Couldn't copy the link. Your code is ${inviteCode}.`)
-    }
-  }
-
-  async function handleAdd(event: FormEvent) {
-    event.preventDefault()
-    setMessage(null)
-    setError(null)
-    setAdding(true)
-    try {
-      const name = await addFriend(code)
-      setMessage(`You and ${name} are now friends.`)
-      setCode('')
-      window.history.replaceState(null, '', '/?tab=friends')
-      onAdded()
-    } catch (err) {
-      setError(errorText(err))
-    } finally {
-      setAdding(false)
-    }
-  }
-
-  return (
-    <section className="compete-section">
-      <h2>{first ? 'Bring a friend' : 'Add a friend'}</h2>
-      {first && (
-        <p className="compete-lead">
-          Studying is easier with company. Send a friend your link, and you'll see
-          when each other are studying and can join in.
-        </p>
-      )}
-      <p className="compete-note">They don't see your clips.</p>
-
-      <div className="invite-row">
-        <code className="invite-code">{inviteCode}</code>
-        <button type="button" className="compete-btn" onClick={handleCopy}>
-          {copied ? 'Copied' : 'Copy invite link'}
-        </button>
-      </div>
-
-      <form className="invite-row" onSubmit={handleAdd}>
-        <input
-          className="invite-input"
-          aria-label="Friend's invite code"
-          placeholder="Friend's code"
-          autoComplete="off"
-          value={code}
-          onChange={(e) => setCode(e.target.value)}
-        />
-        <button
-          type="submit"
-          className="compete-btn"
-          disabled={adding || code.trim() === ''}
-        >
-          Add friend
-        </button>
-      </form>
-
-      {message && <p className="compete-note" role="status">{message}</p>}
-      {error && <p className="compete-error" role="alert">{error}</p>}
-    </section>
-  )
-}
-
 export default function Compete({
   room = null,
   onJoin = () => {},
@@ -612,8 +518,13 @@ export default function Compete({
             </p>
           )}
 
+          {/* Friends are people you've studied with: joining someone's
+              room, or them joining yours, is what connects you. */}
           {board.friends.length === 0 && (
-            <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} first />
+            <p className="compete-lead">
+              Send someone your link while you're studying. Once they join, you're
+              friends.
+            </p>
           )}
 
           {board.friends.length > 0 && (
@@ -663,10 +574,6 @@ export default function Compete({
                 </details>
               )}
             </section>
-          )}
-
-          {board.friends.length > 0 && (
-            <InviteForm inviteCode={board.profile.inviteCode} onAdded={refresh} />
           )}
 
           <button type="button" className="compete-link" onClick={handleSignOut}>
