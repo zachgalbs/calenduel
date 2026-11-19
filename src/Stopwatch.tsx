@@ -2,8 +2,8 @@ import { useEffect, useState } from 'react'
 import { NOT_PAUSED, studiedMs, type PauseState } from './session/elapsed'
 import './Stopwatch.css'
 
-// Deliberately almost nothing: one big number (whole minutes) with the seconds
-// tucked in small beside it.
+// Deliberately almost nothing: the time as m:ss (h:mm:ss past an hour), one
+// size throughout, the seconds in a quieter grey.
 const LAP_MS = 60_000
 // Re-read the clock a few times a second so each second flips close to when
 // it actually ticks over (a 1s interval could lag by up to a second).

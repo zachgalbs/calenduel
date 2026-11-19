@@ -1,9 +1,10 @@
 /* ─────────────────────────────────────────────────────────────────
-   Stopwatch — just the numbers. Big minutes, small seconds.
+   Stopwatch — just the numbers. Minutes and seconds at one size, so it
+   reads as one time; the seconds sit back in the quieter grey.
    ───────────────────────────────────────────────────────────────── */
 
 .stopwatch {
-  --size: clamp(6rem, 30vw, 10rem);
+  --size: clamp(3.5rem, 15vw, 6rem);
 }
 
 .stopwatch-minutes {
@@ -11,16 +12,13 @@
   font-size: var(--size);
   font-weight: 400;
   line-height: 0.85;
-  letter-spacing: -0.04em;
+  letter-spacing: -0.02em;
   font-variant-numeric: tabular-nums lining-nums;
   color: var(--text-h);
 }
 
-/* Seconds: small and quiet, riding the numeral's baseline. */
+/* Seconds: the same size, quieter. */
 .stopwatch-seconds {
-  font-size: 0.26em;
-  letter-spacing: 0;
-  margin-left: 0.08em;
   color: var(--text);
 }
 
