@@ -217,8 +217,8 @@
   transform-origin: 50% 100%;
   transform: perspective(700px) translate3d(0, 0, 0) rotateX(0deg);
   transition:
-    transform 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.5s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
     filter 0.2s ease;
 }
 
@@ -281,7 +281,7 @@
   border: 0;
   background: none;
   cursor: pointer;
-  transition: transform 0.45s cubic-bezier(0.3, 0.7, 0.2, 1);
+  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
 }
 
 .shelf-pile:hover {

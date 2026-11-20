@@ -11,8 +11,8 @@
 
   /* Text */
   --text-h: #1c1b17;        /* warm near-black (headings, primary) */
-  --text: #807a6d;           /* warm stone (secondary) */
-  --text-mute: #aaa493;      /* warm stone (tertiary) */
+  --text: #645f55;           /* warm stone (secondary): 6.1:1 on --bg */
+  --text-mute: #78715e;      /* warm stone (tertiary): 4.6:1 on --bg, the AA floor */
 
   /* Border */
   --border: #e8e5dc;
