@@ -16,13 +16,15 @@ import Network
 import ServiceManagement
 
 let PORT: UInt16 = 47615
-#if DEV // ./build.sh --dev: also answer the local vite dev server
-let ALLOWED_ORIGINS: Set<String> = [
+// The site lives at both domains: calenduel.com and timelapse.study.
+let SITE_ORIGINS: Set<String> = [
   "https://calenduel.com", "https://www.calenduel.com",
-  "http://localhost:5173", "http://127.0.0.1:5173",
+  "https://timelapse.study", "https://www.timelapse.study",
 ]
+#if DEV // ./build.sh --dev: also answer the local vite dev server
+let ALLOWED_ORIGINS = SITE_ORIGINS.union(["http://localhost:5173", "http://127.0.0.1:5173"])
 #else
-let ALLOWED_ORIGINS: Set<String> = ["https://calenduel.com", "https://www.calenduel.com"]
+let ALLOWED_ORIGINS = SITE_ORIGINS
 #endif
 let MAX_SIDE: CGFloat = 1600 // long side of served frames; the timelapse pane is smaller
 let MAX_FPS = 4.0 // frames encoded per second at most; the page polls ~2/s

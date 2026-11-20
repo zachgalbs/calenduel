@@ -37,11 +37,14 @@ while it is sending frames to a session.
 
 ## Privacy
 
-- Listens on 127.0.0.1 only and answers only calenduel.com (and the local dev
-  server). Other sites, `<img>` tags and requests without an Origin get 403.
+- Listens on 127.0.0.1 only and answers only calenduel.com and timelapse.study
+  (and the local dev server). Other sites, `<img>` tags and requests without an Origin get 403.
 - Captures only while a page is asking for frames; stops after 10 s without one.
 - Keeps nothing on disk. Frames stay in memory until the next one replaces them.
-- To turn it off in a browser, open `calenduel.com/?ipadHelper=0`.
+- The switch is per site: to use it on timelapse.study too, open
+  `timelapse.study/?ipadHelper=1` once.
+- To turn it off in a browser, open `calenduel.com/?ipadHelper=0` (or the same on
+  timelapse.study).
 
 ## Endpoints
 
