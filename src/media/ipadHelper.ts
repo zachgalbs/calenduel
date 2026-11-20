@@ -26,6 +26,15 @@ export function helperEnabled(): boolean {
   }
 }
 
+// Turns the helper on for this browser, as ?ipadHelper=1 does.
+export function enableHelper(): void {
+  try {
+    localStorage.setItem(FLAG, '1')
+  } catch {
+    // Storage blocked: the helper just stays off.
+  }
+}
+
 // Run once on load: ?ipadHelper=1 turns the helper on for this browser, =0 turns
 // it off. The parameter is then removed so it doesn't linger in the address bar.
 export function consumeHelperParam(): void {

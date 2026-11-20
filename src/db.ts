@@ -85,6 +85,27 @@ export async function saveSession(
   return id
 }
 
+// Adds a session brought over from the app's other address (see move/),
+// keeping its id, so one already uploaded isn't uploaded twice. Returns false,
+// and changes nothing, if this browser already has that session.
+export async function importSession(meta: SessionMeta, clip: Blob | null): Promise<boolean> {
+  const db = await openDb()
+  const tx = db.transaction(['sessions', 'clips'], 'readwrite')
+  const store = tx.objectStore('sessions')
+  let added = false
+  const read = store.get(meta.id)
+  read.onsuccess = () => {
+    if (read.result) return
+    const hasClip = clip !== null && clip.size > 0
+    store.put({ ...meta, hasClip })
+    if (hasClip) tx.objectStore('clips').put(clip, meta.id)
+    added = true
+  }
+  await awaitTransaction(tx)
+  if (added) requestPersistence()
+  return added
+}
+
 export async function listSessions(): Promise<SessionMeta[]> {
   const db = await openDb()
   const all = await promisify(

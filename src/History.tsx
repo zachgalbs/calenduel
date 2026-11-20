@@ -26,6 +26,7 @@ import {
   type Book,
 } from './subjects/shelf'
 import { addDays, localDay } from './compete/stats'
+import BringOver from './move/BringOver'
 
 function formatDate(ms: number): string {
   return new Date(ms).toLocaleDateString([], {
@@ -415,6 +416,7 @@ export default function History() {
         </section>
       )}
       <SubjectOptions subjects={subjects} />
+      <BringOver onMoved={refresh} />
     </main>
   )
 }

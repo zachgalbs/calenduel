@@ -1,0 +1,28 @@
+/* BringOver: one quiet line at the foot of Sessions. */
+.move-line {
+  margin: 2rem 0 0;
+  font-size: 13px;
+  color: var(--text);
+}
+
+/* SendSessions: the small window at the other address. */
+.move-page {
+  max-width: 22rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+  font-size: 15px;
+  color: var(--text-h);
+}
+
+.move-send {
+  margin-top: 0.5rem;
+  padding: 0.5rem 1.5rem;
+  font-size: 15px;
+}
+
+.move-note {
+  margin-top: 1rem;
+  font-size: 13px;
+  color: var(--text);
+}
