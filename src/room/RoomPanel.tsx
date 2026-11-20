@@ -43,10 +43,14 @@ export default function RoomPanel({
   const { people: others, beatFailing } = useRoom(code, studyingSince, guest)
   const me = useMe()
 
-  // A guest has no profile: their name is the one the table gave them.
-  const name = guest ? (others.find((p) => p.id === selfId)?.name ?? me.name) : me.name
+  // The room lists you too, as everyone else sees you: a guest's number, or
+  // your own name and picture. Used first, so the table never shows a
+  // placeholder you while it's right there.
+  const seen = others.find((p) => p.id === selfId)
+  const name = seen?.name ?? me.name
+  const avatar = guest ? null : (seen?.avatar ?? me.avatar)
   const people: TablePerson[] = [
-    { id: 'me', name, avatar: me.avatar, lit: studyingSince !== null },
+    { id: 'me', name, avatar, lit: studyingSince !== null },
     ...others
       .filter((p) => p.id !== selfId)
       .map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, lit: p.live })),

@@ -11,6 +11,7 @@ import {
 } from '../compete/api'
 import CopyLink from '../room/CopyLink'
 import { XIcon } from '../icons'
+import { rememberMe } from '../room/useMe'
 import { toAvatar } from './avatar'
 
 function errorText(err: unknown): string {
@@ -57,6 +58,7 @@ export default function ProfileSection() {
     try {
       await setAvatar(profile.id, avatar)
       setProfile({ ...profile, avatar })
+      rememberMe({ avatar })
     } catch (err) {
       setError(errorText(err))
     } finally {
@@ -91,6 +93,7 @@ export default function ProfileSection() {
     try {
       const name = await setUsername(wanted)
       setProfile({ ...profile, name })
+      rememberMe({ name })
       setDraft(null)
       setError(null)
     } catch (err) {
