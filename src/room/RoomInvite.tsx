@@ -1,16 +1,16 @@
 import { useEffect, useState } from 'react'
-import StudyTable, { type TablePerson } from './StudyTable'
-import { useMe } from './useMe'
-import { usePersonPeek } from './useRoom'
+import RoomPanel from './RoomPanel'
+import { guestSecret } from './guest'
+import { usePersonPeek, type Seat } from './useRoom'
 
 // Where the table goes when someone's ?with= link brought you here. While
-// they're studying: their table as it is, with your empty seat at it, and
-// that Enter joins them. No sign-in needed: signed out, you join as a guest.
-// Says nothing for your own link, or a table you're already at (a refresh).
+// they're studying you sit straight down at their table, lamp off until you
+// start, so they see you've arrived. Signed out, you sit as a guest.
 export default function RoomInvite({ username }: { username: string }) {
   const peek = usePersonPeek(username)
-  const me = useMe()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
+  const [seat, setSeat] = useState<Seat | null>(null)
+  const room = peek && !peek.isMe ? peek.room : null
 
   useEffect(() => {
     let closed = false
@@ -25,6 +25,28 @@ export default function RoomInvite({ username }: { username: string }) {
     }
   }, [])
 
+  // Take a seat at their table as soon as there is one. Not left on the way
+  // out: starting carries on in this same seat, and an abandoned one fades
+  // after 90 s without a beat.
+  useEffect(() => {
+    if (!room || signedIn === null) return
+    let closed = false
+    ;(async () => {
+      const api = await import('../compete/api')
+      if (signedIn) {
+        const me = (await api.ensureProfile()).id
+        await api.joinRoom(room)
+        if (!closed) setSeat({ room, selfId: me, guest: false })
+      } else {
+        const id = await api.guestJoin(room, guestSecret())
+        if (!closed) setSeat({ room, selfId: id, guest: true })
+      }
+    })().catch((err) => console.error('sitting down at the study table failed', err))
+    return () => {
+      closed = true
+    }
+  }, [room, signedIn])
+
   async function handleSignIn() {
     try {
       const { signIn } = await import('../compete/api')
@@ -34,7 +56,7 @@ export default function RoomInvite({ username }: { username: string }) {
     }
   }
 
-  if (peek === undefined || signedIn === null || peek?.isMe || peek?.joined) return null
+  if (peek === undefined || signedIn === null || peek?.isMe) return null
 
   if (peek === null) {
     return (
@@ -52,25 +74,19 @@ export default function RoomInvite({ username }: { username: string }) {
     )
   }
 
-  const people: TablePerson[] = [
-    { id: 'me', name: me.name, avatar: me.avatar, lit: false },
-    ...peek.people.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, lit: p.live })),
-  ]
-
   return (
     <>
-      <div className="session-recover" role="status">
-        <p>Press Enter to study with {peek.name}.</p>
-        {!signedIn && (
-          <p className="room-guest-note">
-            This session won't be saved.{' '}
-            <button type="button" className="session-link" onClick={handleSignIn}>
-              Sign in
-            </button>
-          </p>
-        )}
-      </div>
-      <StudyTable people={people} />
+      {!signedIn && (
+        <p className="room-guest-note" role="status">
+          This session won't be saved.{' '}
+          <button type="button" className="session-link" onClick={handleSignIn}>
+            Sign in
+          </button>
+        </p>
+      )}
+      {seat?.room === peek.room && (
+        <RoomPanel code={seat.room} selfId={seat.selfId} guest={seat.guest} studyingSince={null} />
+      )}
     </>
   )
 }
