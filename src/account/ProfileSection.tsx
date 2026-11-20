@@ -67,6 +67,10 @@ export default function ProfileSection() {
     event.preventDefault()
     if (!profile) return
     setNameError(null)
+    if (!/^[a-z0-9_]{3,20}$/.test(draft.trim())) {
+      setNameError('3–20 letters, numbers or _')
+      return
+    }
     setRenaming(true)
     try {
       const name = await setUsername(draft)
@@ -164,11 +168,7 @@ export default function ProfileSection() {
             <span>{personLink(profile.name).replace(/^https?:\/\//, '')}</span>
             <CopyLink link={personLink(profile.name)} className="account-link" />
           </p>
-          <p className="account-note">
-            Your link never expires: send it to anyone, and while you're studying
-            it brings them to your table, no sign-in needed. Changing your
-            username changes your link, and the old one stops working.
-          </p>
+          <p className="account-note">Your link never expires.</p>
         </form>
       )}
 

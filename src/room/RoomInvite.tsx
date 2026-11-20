@@ -39,7 +39,7 @@ export default function RoomInvite({ username, onDismiss }: { username: string; 
   if (peek === null) {
     return (
       <p className="session-notice" role="status">
-        Nobody goes by {username}. Starting studies on your own.
+        No one goes by {username}.
       </p>
     )
   }
@@ -47,7 +47,7 @@ export default function RoomInvite({ username, onDismiss }: { username: string; 
   if (!peek.room) {
     return (
       <p className="session-notice" role="status">
-        {peek.name} isn't studying right now.
+        {peek.name} isn't studying.
       </p>
     )
   }
@@ -63,7 +63,7 @@ export default function RoomInvite({ username, onDismiss }: { username: string; 
         <p>Press Enter to study with {peek.name}.</p>
         {!signedIn && (
           <p className="room-guest-note">
-            You're not signed in, so this session won't be saved to an account.{' '}
+            This session won't be saved.{' '}
             <button type="button" className="session-link" onClick={handleSignIn}>
               Sign in
             </button>
@@ -71,7 +71,7 @@ export default function RoomInvite({ username, onDismiss }: { username: string; 
         )}
         <div className="session-recover-actions">
           <button type="button" className="session-link" onClick={onDismiss}>
-            Study alone instead
+            Study alone
           </button>
         </div>
       </div>

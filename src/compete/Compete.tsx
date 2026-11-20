@@ -521,10 +521,7 @@ export default function Compete({
           {/* Friends are people you've studied with: joining someone's
               table, or them joining yours, is what connects you. */}
           {board.friends.length === 0 && (
-            <p className="compete-lead">
-              Send someone your link. When they join you while you're studying,
-              you're friends.
-            </p>
+            <p className="compete-lead">Send someone your link.</p>
           )}
 
           {board.friends.length > 0 && (
@@ -580,7 +577,7 @@ export default function Compete({
             <CopyLink
               link={personLink(board.profile.name)}
               className="compete-link"
-              label="Copy your link"
+              label="Copy link"
             />
             <button type="button" className="compete-link" onClick={handleSignOut}>
               Sign out {board.profile.name}
