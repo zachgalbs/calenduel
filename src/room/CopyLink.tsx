@@ -1,11 +1,8 @@
 import { useState } from 'react'
+import { CheckIcon, LinkIcon } from '../icons'
 
-// Copies a link, and says so for a moment.
-export default function CopyLink({ link, className, label = 'Copy link' }: {
-  link: string
-  className: string
-  label?: string
-}) {
+// A link icon that copies your link, and turns to a tick for a moment.
+export default function CopyLink({ link }: { link: string }) {
   const [copied, setCopied] = useState(false)
   async function copy() {
     try {
@@ -17,8 +14,8 @@ export default function CopyLink({ link, className, label = 'Copy link' }: {
     }
   }
   return (
-    <button type="button" className={className} onClick={copy}>
-      {copied ? 'Copied' : label}
+    <button type="button" className="icon-btn" aria-label="Copy link" title="Copy link" onClick={copy}>
+      {copied ? <CheckIcon /> : <LinkIcon />}
     </button>
   )
 }

@@ -46,13 +46,12 @@ export default function FeedbackSection() {
     }
   }
 
+  // Signed out, there's nobody to send it as: the section just isn't there.
+  if (!signedIn) return null
+
   return (
     <section className="account-section">
       <h2>Feedback</h2>
-
-      {signedIn === false && (
-        <p className="account-note">Sign in on the Compete tab to send feedback.</p>
-      )}
 
       {signedIn && (
         <form className="feedback" onSubmit={submit}>
@@ -74,18 +73,14 @@ export default function FeedbackSection() {
               className="account-btn"
               disabled={sending || !message.trim()}
             >
-              {sending ? 'Sending...' : 'Send'}
+              {sending ? 'Sending…' : 'Send'}
             </button>
             {sent && (
               <span className="account-note feedback-sent" role="status">
-                Sent. Thanks!
+                Sent
               </span>
             )}
           </div>
-          <p className="account-note">
-            Goes to the people who build Calenduel, with your name. Nobody else
-            sees it.
-          </p>
         </form>
       )}
 

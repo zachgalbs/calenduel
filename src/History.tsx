@@ -8,6 +8,8 @@ import {
   type SessionMeta,
 } from './db'
 import { downloadBlob, timelapseName } from './media/share'
+import { DownloadIcon, XIcon } from './icons'
+import { useUndoable } from './useUndoable'
 import './History.css'
 import FocusScore from './focus/FocusScore'
 import SubjectField, { SubjectOptions } from './subjects/SubjectField'
@@ -49,6 +51,19 @@ function formatDuration(ms: number): string {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${m}:${pad(s)}`
 }
 
+async function downloadClip(session: SessionMeta) {
+  const blob = await getClip(session.id)
+  if (blob) downloadBlob(blob, timelapseName(blob, session.task))
+}
+
+// Server first: if that fails the session stays, rather than gone here while
+// still counting for friends. Throws so the row can come back.
+async function removeSession(session: SessionMeta) {
+  const { deleteUploadedSession } = await import('./compete/api')
+  await deleteUploadedSession(session.id)
+  await deleteSession(session.id)
+}
+
 function SessionCard({ session, subjects, onChanged }: {
   session: SessionMeta
   subjects: string[]
@@ -57,7 +72,6 @@ function SessionCard({ session, subjects, onChanged }: {
   const [playing, setPlaying] = useState(false)
   const [clipUrl, setClipUrl] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
-  const [deleteError, setDeleteError] = useState<string | null>(null)
   const [name, setName] = useState(session.task)
 
   useEffect(() => {
@@ -77,28 +91,6 @@ function SessionCard({ session, subjects, onChanged }: {
     setPlaying(true)
   }
 
-  async function handleDownload() {
-    const blob = clipUrl
-      ? await fetch(clipUrl).then((r) => r.blob())
-      : await getClip(session.id)
-    if (blob) downloadBlob(blob, timelapseName(blob, name.trim() || session.task))
-  }
-
-  async function handleDelete() {
-    setDeleteError(null)
-    // Server first: if this fails, the session is still here to retry, rather
-    // than gone locally while still counting toward the competition.
-    try {
-      const { deleteUploadedSession } = await import('./compete/api')
-      await deleteUploadedSession(session.id)
-    } catch {
-      setDeleteError("Couldn't remove this from what your friends see. Try again.")
-      return
-    }
-    await deleteSession(session.id)
-    onChanged()
-  }
-
   // Saved when the field loses focus. Clearing it puts the old name back
   // rather than leaving a session with no name.
   async function handleRename() {
@@ -109,10 +101,6 @@ function SessionCard({ session, subjects, onChanged }: {
     onChanged()
     void sortSessions() // a guessed subject was for the old name
   }
-
-  const metPct = session.goalMs > 0
-    ? Math.round((session.elapsedMs / session.goalMs) * 100)
-    : 0
 
   return (
     <li className="history-card">
@@ -157,24 +145,7 @@ function SessionCard({ session, subjects, onChanged }: {
         </p>
         <p className="history-stats">
           <span className="history-duration">{formatDuration(session.elapsedMs)}</span>
-          {session.goalMs > 0 && (
-            <span className={metPct >= 100 ? 'history-goal met' : 'history-goal'}>
-              {metPct >= 100 ? '✓ ' : ''}{metPct}% of goal
-            </span>
-          )}
         </p>
-        {deleteError && <p className="history-error" role="alert">{deleteError}</p>}
-      </div>
-
-      <div className="history-actions">
-        {session.hasClip && (
-          <button type="button" className="history-btn" onClick={handleDownload}>
-            Save
-          </button>
-        )}
-        <button type="button" className="history-btn danger" onClick={handleDelete}>
-          Delete
-        </button>
       </div>
       <FocusScore session={session} onChanged={onChanged} />
     </li>
@@ -291,19 +262,70 @@ function SessionRow({ session, subjects, onChanged, subject }: {
   subject?: string
 }) {
   const [open, setOpen] = useState(false)
+  const [failed, setFailed] = useState(false)
+  // Deleting takes a few seconds to happen, so it can be undone.
+  const removal = useUndoable(async () => {
+    try {
+      await removeSession(session)
+      onChanged()
+    } catch (err) {
+      setFailed(true)
+      throw err
+    }
+  })
+
+  if (removal.pending) {
+    return (
+      <li className="book-session">
+        <p className="undo-line" role="status">
+          Deleted
+          <button type="button" onClick={removal.undo}>Undo</button>
+        </p>
+      </li>
+    )
+  }
+
   return (
     <li className="book-session" data-open={open}>
-      <button
-        type="button"
-        className="book-line"
-        aria-expanded={open}
-        onClick={() => setOpen((o) => !o)}
-      >
-        <span className="book-name">{session.task}</span>
-        {subject && <span className="book-subject">{subject}</span>}
-        <span className="book-when">{whenLabel(session.startedAt)}</span>
-        <span className="book-length">{totalTime(session.elapsedMs)}</span>
-      </button>
+      <div className="book-row reveal">
+        <button
+          type="button"
+          className="book-line"
+          aria-expanded={open}
+          onClick={() => setOpen((o) => !o)}
+        >
+          <span className="book-name">{session.task}</span>
+          {subject && <span className="book-subject">{subject}</span>}
+          <span className="book-when">{whenLabel(session.startedAt)}</span>
+          <span className="book-length">{totalTime(session.elapsedMs)}</span>
+        </button>
+        <span className="book-actions reveal-item">
+          {session.hasClip && (
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Download timelapse"
+              title="Download"
+              onClick={() => void downloadClip(session)}
+            >
+              <DownloadIcon />
+            </button>
+          )}
+          <button
+            type="button"
+            className="icon-btn"
+            aria-label="Delete session"
+            title="Delete"
+            onClick={() => {
+              setFailed(false)
+              removal.start()
+            }}
+          >
+            <XIcon />
+          </button>
+        </span>
+      </div>
+      {failed && <p className="history-error" role="alert">Couldn't delete. Try again.</p>}
       {open && (
         <ul className="history-list">
           <SessionCard session={session} subjects={subjects} onChanged={onChanged} />
@@ -360,10 +382,8 @@ export default function History() {
     <main className="history">
       <h1>Sessions</h1>
 
-      {sessions === null && <p className="history-hint">Loading...</p>}
-
       {sessions !== null && sessions.length === 0 && (
-        <p className="history-hint">No sessions yet. Complete a study session to see it here.</p>
+        <p className="history-hint">No sessions yet.</p>
       )}
 
       {sessions !== null && <RecheckAll sessions={sessions} />}

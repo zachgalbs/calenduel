@@ -3,7 +3,6 @@ import {
   ensureProfile,
   fetchDailyTotals,
   fetchFriendSessions,
-  FRIEND_SESSION_LIMIT,
   isSignedIn,
   joinableRooms,
   listFriends,
@@ -11,7 +10,6 @@ import {
   personLink,
   removeFriend,
   signIn,
-  signOut,
   syncSessions,
   type Friend,
   type FriendSession,
@@ -30,6 +28,8 @@ import {
   type WeekSummary,
 } from './stats'
 import CopyLink from '../room/CopyLink'
+import { XIcon } from '../icons'
+import { useUndoable } from '../useUndoable'
 import Avatar from '../Avatar'
 import './Compete.css'
 
@@ -107,14 +107,13 @@ function FriendSessions({ friendId }: { friendId: string }) {
   }, [friendId])
 
   if (error) return <p className="compete-error" role="alert">{error}</p>
-  if (!sessions) return <p className="compete-note">Loading...</p>
+  if (!sessions) return null
   if (sessions.length === 0) {
-    return <p className="compete-note">No sessions since you connected.</p>
+    return <p className="compete-note">No sessions yet.</p>
   }
 
   return (
-    <>
-      <table className="compete-table">
+    <table className="compete-table">
         <tbody>
           {sessions.map((s) => (
             <tr key={s.id}>
@@ -123,11 +122,7 @@ function FriendSessions({ friendId }: { friendId: string }) {
             </tr>
           ))}
         </tbody>
-      </table>
-      {sessions.length === FRIEND_SESSION_LIMIT && (
-        <p className="compete-note">Showing the latest {FRIEND_SESSION_LIMIT}.</p>
-      )}
-    </>
+    </table>
   )
 }
 
@@ -182,9 +177,11 @@ function FriendRow({
   onRemoved: () => void
 }) {
   const [open, setOpen] = useState(false)
-  const [sessionsOpen, setSessionsOpen] = useState(false)
-  const [confirming, setConfirming] = useState(false)
-  const [error, setError] = useState<string | null>(null)
+  // Removing takes a few seconds to happen, so it can be undone.
+  const removal = useUndoable(async () => {
+    await removeFriend(friend.id)
+    onRemoved()
+  })
 
   const line =
     status?.kind === 'studying'
@@ -195,20 +192,21 @@ function FriendRow({
           ? `${formatStudyTime(summary.todayMs)} today`
           : lastStudied(summary.lastDay, today)
 
-  async function handleRemove() {
-    setError(null)
-    try {
-      await removeFriend(friend.id)
-      onRemoved()
-    } catch (err) {
-      setError(errorText(err))
-    }
+  if (removal.pending) {
+    return (
+      <li className="friend-row">
+        <p className="undo-line" role="status">
+          Removed {friend.name}
+          <button type="button" onClick={removal.undo}>Undo</button>
+        </p>
+      </li>
+    )
   }
 
   return (
     <li className="friend-row" data-live={status !== null}>
       <details onToggle={(e) => setOpen(e.currentTarget.open)}>
-        <summary className="friend-line">
+        <summary className="friend-line reveal">
           <Avatar name={friend.name} src={friend.avatar} size={36} />
           <span className="friend-who">
             <span className="friend-name">
@@ -233,6 +231,18 @@ function FriendRow({
               </button>
             )}
           </span>
+          <button
+            type="button"
+            className="icon-btn reveal-item"
+            aria-label={`Remove ${friend.name}`}
+            title="Remove friend"
+            onClick={(e) => {
+              e.preventDefault() // not also open the row
+              removal.start()
+            }}
+          >
+            <XIcon size={12} />
+          </button>
         </summary>
 
         {open && (
@@ -256,31 +266,7 @@ function FriendRow({
               </div>
             </dl>
 
-            <details
-              className="friend-sessions"
-              onToggle={(e) => setSessionsOpen(e.currentTarget.open)}
-            >
-              <summary>Sessions</summary>
-              {sessionsOpen && <FriendSessions friendId={friend.id} />}
-            </details>
-
-            <div className="friend-actions">
-              {confirming ? (
-                <>
-                  <button type="button" className="compete-btn danger" onClick={handleRemove}>
-                    Remove {friend.name}
-                  </button>
-                  <button type="button" className="compete-btn" onClick={() => setConfirming(false)}>
-                    Keep
-                  </button>
-                </>
-              ) : (
-                <button type="button" className="compete-link" onClick={() => setConfirming(true)}>
-                  Remove friend
-                </button>
-              )}
-            </div>
-            {error && <p className="compete-error" role="alert">{error}</p>}
+            <FriendSessions friendId={friend.id} />
           </div>
         )}
       </details>
@@ -437,17 +423,6 @@ export default function Compete({
     }
   }
 
-  async function handleSignOut() {
-    setError(null)
-    try {
-      await signOut()
-      setBoard(null)
-      setSignedIn(false)
-    } catch (err) {
-      setError(errorText(err))
-    }
-  }
-
   const totals = board ? withLive(board.totals, live, now) : []
   // What each friend is doing now. A break keeps its room open, so it counts;
   // a stopped session waiting on its upload doesn't.
@@ -483,38 +458,26 @@ export default function Compete({
     <main className="compete">
       <header className="compete-head">
         <h1>Friends</h1>
+        {board && <CopyLink link={personLink(board.profile.name)} />}
       </header>
 
       {error && <p className="compete-error" role="alert">{error}</p>}
 
-      {signedIn === null && !error && <p className="compete-note">Loading...</p>}
-
       {signedIn === false && (
         <section className="compete-section">
-          <p className="compete-lead">
-            Study alongside your friends. See when they're studying, join them in
-            a click, and keep each other going day by day.
-          </p>
+          <p className="compete-lead">Study with your friends.</p>
           <button type="button" className="compete-btn primary" onClick={handleSignIn}>
             Sign in with Google
           </button>
-          <p className="compete-note">
-            Signing in uploads the start time and length of your sessions so they
-            can count and friends you add can see them. Your clips stay on this
-            device.
-          </p>
         </section>
       )}
-
-      {signedIn && !board && !error && <p className="compete-note">Loading...</p>}
 
       {board && (
         <>
           {board.failedUploads > 0 && (
             <p className="compete-error" role="alert">
-              {plural(board.failedUploads, 'session')} couldn't be uploaded and
-              {board.failedUploads === 1 ? " isn't" : " aren't"} counted yet. Check
-              that your computer's clock is right.
+              {plural(board.failedUploads, 'session')} couldn't upload. Check your
+              clock.
             </p>
           )}
 
@@ -572,17 +535,6 @@ export default function Compete({
               )}
             </section>
           )}
-
-          <div className="compete-foot">
-            <CopyLink
-              link={personLink(board.profile.name)}
-              className="compete-link"
-              label="Copy link"
-            />
-            <button type="button" className="compete-link" onClick={handleSignOut}>
-              Sign out {board.profile.name}
-            </button>
-          </div>
         </>
       )}
     </main>

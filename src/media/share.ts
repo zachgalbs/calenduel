@@ -52,7 +52,7 @@ export function downloadBlob(blob: Blob, filename: string): void {
 // A dismissed sheet (AbortError) is a normal user action, not a failure.
 export async function shareFile(file: File): Promise<void> {
   try {
-    await navigator.share({ files: [file], title: 'Calenduel timelapse' })
+    await navigator.share({ files: [file], title: 'Timelapse' })
   } catch (err) {
     if (err instanceof Error && err.name === 'AbortError') return
     throw err

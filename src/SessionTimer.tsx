@@ -17,6 +17,7 @@ import {
 import RoomPanel, { SoloTable } from './room/RoomPanel'
 import RoomInvite from './room/RoomInvite'
 import { guestSecret } from './room/guest'
+import { PlusIcon, XIcon } from './icons'
 import { saveSeat, savedSeat, type Seat } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
 import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
@@ -452,7 +453,7 @@ export default function SessionTimer({
           preview of your own screen reflects itself forever. Shown whenever
           the feeds are live (running + encoding). */}
       {streaming && (
-        <div className="session-stage" data-ipad={ipadStream !== null}>
+        <div className="session-stage reveal" data-ipad={ipadStream !== null}>
           <video
             ref={faceVideoRef}
             className="session-face"
@@ -460,6 +461,19 @@ export default function SessionTimer({
             playsInline
             muted
           />
+          {/* A second share for one window (QuickTime mirroring the iPad). Its
+              own click, since the picker needs a fresh user gesture. */}
+          {status === 'running' && !ipadStream && (
+            <button
+              type="button"
+              className="session-ipad-add reveal-item"
+              aria-label="Add iPad"
+              title="Add iPad"
+              onClick={() => void addIpad()}
+            >
+              <PlusIcon />
+            </button>
+          )}
           {/* Below the face: you look down at the iPad. */}
           {ipadStream && (
             <div className="session-ipad-wrap">
@@ -524,13 +538,6 @@ export default function SessionTimer({
           </button>
         )}
 
-        {/* A second share for one window (QuickTime mirroring the iPad). Its own
-            click, since the picker needs a fresh user gesture. */}
-        {status === 'running' && !ipadStream && (
-          <button type="button" className="session-link" onClick={() => void addIpad()}>
-            Add iPad
-          </button>
-        )}
 
 
         {status === 'encoding' && (
@@ -564,11 +571,10 @@ export default function SessionTimer({
       {status === 'idle' && interrupted && (
         <div className="session-recover" role="status">
           <p>
-            “{interrupted.name}” was cut off after{' '}
+            Cut off after{' '}
             {formatStudyTime(
               studiedMs(interrupted.startedAt, interrupted.lastSeen, pauseOf(interrupted)),
-            )}. Its
-            timelapse couldn't be kept.
+            )}
           </p>
           <div className="session-recover-actions">
             {Date.now() - interrupted.lastSeen < RESUME_WINDOW_MS && (
@@ -577,10 +583,16 @@ export default function SessionTimer({
               </button>
             )}
             <button type="button" className="session-stop" onClick={handleSaveInterrupted}>
-              Save the time
+              Save
             </button>
-            <button type="button" className="session-link" onClick={handleDiscardInterrupted}>
-              Discard
+            <button
+              type="button"
+              className="icon-btn"
+              aria-label="Discard"
+              title="Discard"
+              onClick={handleDiscardInterrupted}
+            >
+              <XIcon />
             </button>
           </div>
         </div>

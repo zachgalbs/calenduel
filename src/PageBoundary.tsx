@@ -24,10 +24,7 @@ export default class PageBoundary extends Component<
     if (!this.state.failed) return this.props.children
     return (
       <div className="page-failed" role="alert">
-        <p>
-          This part of Calenduel couldn't load. Reloading usually fixes it: the
-          site may have been updated since this tab was opened.
-        </p>
+        <p>This couldn't load.</p>
         <button type="button" onClick={() => window.location.reload()}>
           Reload
         </button>

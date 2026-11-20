@@ -143,17 +143,6 @@
   color: var(--text-h);
 }
 
-.history-goal {
-  font-family: var(--mono);
-  font-size: 11px;
-  letter-spacing: 0.02em;
-  color: var(--text);
-}
-
-.history-goal.met {
-  color: var(--accent);
-}
-
 .history-error {
   font-size: 12px;
   color: var(--error);
@@ -161,12 +150,6 @@
 }
 
 /* ── Action buttons ───────────────────────────────────────────── */
-
-.history-actions {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
 
 .history-btn {
   font: inherit;
@@ -353,7 +336,21 @@
   border-bottom: 1px solid var(--border);
 }
 
+.book-row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.book-actions {
+  flex: none;
+  display: flex;
+  gap: 0.1rem;
+}
+
 .book-line {
+  flex: 1;
+  min-width: 0;
   width: 100%;
   display: flex;
   align-items: baseline;

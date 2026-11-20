@@ -10,6 +10,7 @@ import './Account.css'
 // waits on the auth and database SDK.
 const ProfileSection = lazy(() => import('./ProfileSection'))
 const FeedbackSection = lazy(() => import('./FeedbackSection'))
+const SignOut = lazy(() => import('./SignOut'))
 
 function days(n: number): string {
   return `${n} day${n === 1 ? '' : 's'}`
@@ -87,8 +88,6 @@ export default function Account() {
 
   return (
     <main className="account">
-      <h1>Account</h1>
-
       <PageBoundary>
         <Suspense fallback={null}>
           <ProfileSection />
@@ -97,11 +96,7 @@ export default function Account() {
 
       <section className="account-section">
         <h2>Stats</h2>
-        {stats ? <Stats stats={stats} /> : <p className="account-note">Loading...</p>}
-        <p className="account-note">
-          Counted from the sessions saved on this device, each toward the day it
-          started.
-        </p>
+        {stats && <Stats stats={stats} />}
       </section>
 
       <section className="account-section">
@@ -112,6 +107,12 @@ export default function Account() {
       <PageBoundary>
         <Suspense fallback={null}>
           <FeedbackSection />
+        </Suspense>
+      </PageBoundary>
+
+      <PageBoundary>
+        <Suspense fallback={null}>
+          <SignOut />
         </Suspense>
       </PageBoundary>
     </main>

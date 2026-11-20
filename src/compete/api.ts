@@ -58,7 +58,7 @@ export async function focusToken(): Promise<string | null> {
 // Leaves the page for Google, then returns to the tab it left from (Friends
 // unless told otherwise). Anything already in the URL, like an invite code,
 // survives the round trip.
-export async function signIn(tab: 'friends' | 'timer' = 'friends'): Promise<void> {
+export async function signIn(tab: 'friends' | 'timer' | 'account' = 'friends'): Promise<void> {
   const params = new URLSearchParams(window.location.search)
   params.set('tab', tab)
   const { error } = await neon.auth.signIn.social({

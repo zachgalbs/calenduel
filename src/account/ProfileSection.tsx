@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent } from 'react'
 import Avatar from '../Avatar'
 import {
   ensureProfile,
@@ -6,27 +6,30 @@ import {
   personLink,
   setAvatar,
   setUsername,
+  signIn,
   type Profile,
 } from '../compete/api'
 import CopyLink from '../room/CopyLink'
+import { XIcon } from '../icons'
 import { toAvatar } from './avatar'
 
 function errorText(err: unknown): string {
   return err instanceof Error ? err.message : 'Something went wrong. Please try again.'
 }
 
-// The signed-in half of the Account page. It imports the auth and database SDK,
-// so Account loads it on demand, the same way App loads Compete.
+const USERNAME = /^[a-z0-9_]{3,20}$/
+
+// The top of Account: you. The picture and the name are the controls: click
+// the picture to change it (× on hover removes it), click the name to rename.
+// It imports the auth and database SDK, so Account loads it on demand.
 export default function ProfileSection() {
   // null = still finding out.
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
   const [profile, setProfile] = useState<Profile | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  // The username being typed; it only becomes yours on Save.
-  const [draft, setDraft] = useState('')
-  const [nameError, setNameError] = useState<string | null>(null)
-  const [renaming, setRenaming] = useState(false)
+  // The name being typed, or null when not renaming.
+  const [draft, setDraft] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -37,9 +40,7 @@ export default function ProfileSection() {
       setSignedIn(active)
       if (!active) return
       const mine = await ensureProfile()
-      if (closed) return
-      setProfile(mine)
-      setDraft(mine.name)
+      if (!closed) setProfile(mine)
     }
     load().catch((err) => {
       if (!closed) setError(errorText(err))
@@ -63,26 +64,6 @@ export default function ProfileSection() {
     }
   }
 
-  async function handleRename(event: FormEvent) {
-    event.preventDefault()
-    if (!profile) return
-    setNameError(null)
-    if (!/^[a-z0-9_]{3,20}$/.test(draft.trim())) {
-      setNameError('3–20 letters, numbers or _')
-      return
-    }
-    setRenaming(true)
-    try {
-      const name = await setUsername(draft)
-      setProfile({ ...profile, name })
-      setDraft(name)
-    } catch (err) {
-      setNameError(errorText(err))
-    } finally {
-      setRenaming(false)
-    }
-  }
-
   async function handleFile(event: ChangeEvent<HTMLInputElement>) {
     const file = event.target.files?.[0]
     // Cleared so choosing the same file again still fires a change.
@@ -95,82 +76,102 @@ export default function ProfileSection() {
     }
   }
 
+  // Enter or clicking away saves; Escape, or no change, just closes it.
+  async function rename() {
+    if (!profile || draft === null) return
+    const wanted = draft.trim()
+    if (wanted === profile.name || wanted === '') {
+      setDraft(null)
+      return
+    }
+    if (!USERNAME.test(wanted)) {
+      setError('3–20 letters, numbers or _')
+      return
+    }
+    try {
+      const name = await setUsername(wanted)
+      setProfile({ ...profile, name })
+      setDraft(null)
+      setError(null)
+    } catch (err) {
+      setError(errorText(err))
+    }
+  }
+
+  if (signedIn === false) {
+    return (
+      <section className="account-section">
+        <button type="button" className="account-btn" onClick={() => void signIn('account')}>
+          Sign in with Google
+        </button>
+      </section>
+    )
+  }
+
+  if (!profile) {
+    return error ? <p className="account-error" role="alert">{error}</p> : null
+  }
+
   return (
     <section className="account-section">
-      <h2>Profile</h2>
-
-      {signedIn === null && !error && <p className="account-note">Loading...</p>}
-
-      {signedIn === false && (
-        <p className="account-note">
-          Sign in on the Friends tab to set a profile picture.
-        </p>
-      )}
-
-      {profile && (
-        <div className="profile">
-          <Avatar name={profile.name} src={profile.avatar} size={64} />
-          <div className="profile-info">
-            <p className="profile-name">{profile.name}</p>
-            <div className="profile-actions">
-              {/* A real button, so the keyboard can reach it; the browser's own
-                  file input is hidden and opened from here. */}
-              <button
-                type="button"
-                className="account-btn"
-                disabled={saving}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                {saving ? 'Saving...' : profile.avatar ? 'Change picture' : 'Add a picture'}
-              </button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                hidden
-                onChange={handleFile}
-              />
-              {profile.avatar && !saving && (
-                <button type="button" className="account-link" onClick={() => save(null)}>
-                  Remove
-                </button>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {profile && (
-        <form className="username" onSubmit={handleRename}>
-          <label className="username-label" htmlFor="username">
-            Username
-          </label>
-          <div className="username-row">
-            <input
-              id="username"
-              className="username-input"
-              value={draft}
-              maxLength={20}
-              autoComplete="off"
-              spellCheck={false}
-              onChange={(e) => setDraft(e.target.value.toLowerCase())}
-            />
+      <div className="profile">
+        <div className="profile-photo reveal">
+          <button
+            type="button"
+            className="profile-photo-pick"
+            aria-label={profile.avatar ? 'Change picture' : 'Add a picture'}
+            title={profile.avatar ? 'Change picture' : 'Add a picture'}
+            disabled={saving}
+            onClick={() => fileInputRef.current?.click()}
+          >
+            <Avatar name={profile.name} src={profile.avatar} size={64} />
+          </button>
+          {profile.avatar && !saving && (
             <button
-              type="submit"
-              className="account-btn"
-              disabled={renaming || draft.trim() === profile.name}
+              type="button"
+              className="icon-btn profile-photo-remove reveal-item"
+              aria-label="Remove picture"
+              title="Remove picture"
+              onClick={() => void save(null)}
             >
-              {renaming ? 'Saving...' : 'Save'}
+              <XIcon size={12} />
             </button>
-          </div>
-          {nameError && <p className="account-error" role="alert">{nameError}</p>}
-          <p className="username-link">
-            <span>{personLink(profile.name).replace(/^https?:\/\//, '')}</span>
-            <CopyLink link={personLink(profile.name)} className="account-link" />
-          </p>
-          <p className="account-note">Your link never expires.</p>
-        </form>
-      )}
+          )}
+          <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={handleFile} />
+        </div>
+
+        {draft === null ? (
+          <button
+            type="button"
+            className="profile-name"
+            title="Change username"
+            onClick={() => setDraft(profile.name)}
+          >
+            {profile.name}
+          </button>
+        ) : (
+          <input
+            className="profile-name profile-name-input"
+            aria-label="Username"
+            autoFocus
+            value={draft}
+            maxLength={20}
+            autoComplete="off"
+            spellCheck={false}
+            onChange={(e) => setDraft(e.target.value.toLowerCase())}
+            onBlur={() => void rename()}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+              if (e.key === 'Escape') {
+                setError(null)
+                setDraft(null)
+              }
+            }}
+          />
+        )}
+
+        <CopyLink link={personLink(profile.name)} />
+      </div>
 
       {error && <p className="account-error" role="alert">{error}</p>}
     </section>

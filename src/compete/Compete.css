@@ -40,8 +40,7 @@
 
 .compete-head {
   display: flex;
-  justify-content: space-between;
-  align-items: baseline;
+  align-items: center;
   gap: 1rem;
   margin: 0 0 2.5rem;
 }
@@ -171,27 +170,18 @@
   color: var(--text-h);
 }
 
-.friend-sessions summary,
 .friend-quiet > summary {
   font-size: 13px;
   color: var(--text);
   cursor: pointer;
 }
 
-.friend-sessions summary:hover,
 .friend-quiet > summary:hover {
   color: var(--text-h);
 }
 
-.friend-sessions .compete-table {
-  margin-top: 0.5rem;
-}
-
-.friend-actions {
+.friend-more .compete-table {
   margin-top: 0.75rem;
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
 }
 
 .friend-quiet {
@@ -285,12 +275,6 @@
   color: var(--error);
   border-color: var(--error);
   background: transparent;
-}
-
-.compete-foot {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 1.25rem;
 }
 
 .compete-link {

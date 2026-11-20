@@ -68,33 +68,22 @@ function Status({ report, auto, onTurnOn, onTurnOff }: {
   if (!auto) {
     return asking ? (
       <div className="subject-consent">
-        <p>
-          This sends your session names to Cloudflare, signed in as you, along
-          with your subjects, what you said they cover, and a few sessions you
-          already sorted as examples. Gemma picks a subject for each session.
-          No screenshots or times are sent, and nothing is stored there. The
-          subjects stay on this device.
-        </p>
+        <p>Sends session names to Cloudflare to sort them.</p>
         <button type="button" className="history-btn" onClick={onTurnOn}>Turn on</button>{' '}
         <button type="button" className="history-btn" onClick={() => setAsking(false)}>Cancel</button>
       </div>
     ) : (
       <p className="account-note">
-        {report && report.waiting > 0
-          ? `${report.waiting} session${report.waiting === 1 ? '' : 's'} not sorted yet. `
-          : ''}
-        Set a subject on any session, or{' '}
         <button type="button" className="subject-link" onClick={() => setAsking(true)}>
-          sort sessions automatically
+          Sort automatically
         </button>
-        .
       </p>
     )
   }
-  let line = 'Sorted automatically from session names. Change any one on Sessions.'
-  if (report?.problem === 'signed-out') line = 'Sign in on the Friends tab to sort sessions automatically.'
-  else if (report?.problem === 'limited') line = 'Sorting paused for a minute. It picks up again next visit.'
-  else if (report?.problem === 'failed') line = "Couldn't sort some sessions just now. It tries again next visit."
+  let line = 'Sorted automatically.'
+  if (report?.problem === 'signed-out') line = 'Sign in to sort automatically.'
+  else if (report?.problem === 'limited') line = 'Sorting paused.'
+  else if (report?.problem === 'failed') line = "Couldn't sort some sessions."
   else if (report === null) line = 'Sorting…'
   return (
     <p className="account-note">
@@ -174,20 +163,13 @@ function EditSubjects({ subjects, saved, auto, onSorted }: {
 
   async function resort() {
     await applySubjectEdits(resortUpdates(await listSessions(), auto))
-    setNote(auto
-      ? 'Sorting again. Subjects you set yourself stay.'
-      : 'Matched again on this device. Automatic picks stay until you turn sorting on.')
+    setNote('Sorted again.')
     onSorted()
   }
 
   return (
     <details className="subject-edit">
       <summary>Edit subjects</summary>
-      <p className="account-note">
-        Say what each course covers, so the sorter can tell your courses apart
-        (a code like “MATH 1D” means nothing to it). Rename one onto another to
-        merge them.
-      </p>
       <ul className="subject-edit-list">
         {subjects.map((s) => (
           <li key={`${s}:${aboutOf(s)}`}>
@@ -249,12 +231,7 @@ function EditSubjects({ subjects, saved, auto, onSorted }: {
       <p className="subject-resort">
         <button type="button" className="history-btn" onClick={() => void resort()}>
           Sort again
-        </button>{' '}
-        <span className="account-note">
-          {auto
-            ? "Re-sorts every session you haven't set yourself."
-            : 'Re-matches sessions by name on this device.'}
-        </span>
+        </button>
       </p>
       {note && <p className="account-note" role="status">{note}</p>}
     </details>
@@ -314,7 +291,7 @@ export default function SubjectTally() {
     }
   }, [])
 
-  if (!sessions) return <p className="account-note">Loading...</p>
+  if (!sessions) return null
 
   const subjects = knownSubjects(sessions, saved.map((s) => s.name))
   const totals = subjectTotals(sessions, periodRange(period, today, custom))

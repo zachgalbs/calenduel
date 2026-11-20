@@ -125,6 +125,7 @@
 
 /* ── Live preview (shown while recording) ──────────────────────────── */
 .session-stage {
+  position: relative;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -189,6 +190,25 @@
 .session-ipad-wrap:hover .session-ipad-remove,
 .session-ipad-remove:focus-visible {
   opacity: 1;
+}
+
+/* Add iPad: a + over the camera, shown when you hover it. */
+.session-ipad-add {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  cursor: pointer;
 }
 
 /* ── Buttons ───────────────────────────────────────────────────────── */

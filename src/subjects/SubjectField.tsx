@@ -92,7 +92,7 @@ export default function SubjectField({ session, subjects }: {
         }}
       />
       {tag && tag.by !== 'you' && tag.name !== null && value === shown && (
-        <span className="subject-auto" title="Picked automatically from the session name. Type to change it.">
+        <span className="subject-auto" title="Picked automatically">
           auto
         </span>
       )}
