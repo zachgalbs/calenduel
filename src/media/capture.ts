@@ -20,7 +20,13 @@ export async function startScreen(): Promise<MediaStream> {
   if (!navigator.mediaDevices?.getDisplayMedia) {
     throw new Error('Screen capture is not supported in this browser')
   }
-  return navigator.mediaDevices.getDisplayMedia({ video: true, audio: false })
+  // This tab shows the live, unmasked camera preview, so it is left out of the
+  // picker: sharing it would put your face in the frames focus analysis sends.
+  return navigator.mediaDevices.getDisplayMedia({
+    video: true,
+    audio: false,
+    selfBrowserSurface: 'exclude',
+  } as DisplayMediaStreamOptions)
 }
 
 // A second, independent share for a single window — e.g. QuickTime mirroring an

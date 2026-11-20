@@ -46,7 +46,7 @@ test('preflight permits each origin in the list, and nothing else', async () => 
 
 // Neon Auth signs a token for signed-out visitors as well: same key, same
 // audience, role and sub "anonymous". Anyone on the internet can fetch one.
-test('a signed anonymous token never invokes inference', async () => {
+test('a signed anonymous token, or one with no expiry, never invokes inference', async () => {
   const { publicKey, privateKey } = await generateKeyPair('EdDSA')
   const jwk = { ...await exportJWK(publicKey), kid: 'test', alg: 'EdDSA' }
   const server = createServer((_, res) => {
@@ -66,7 +66,11 @@ test('a signed anonymous token never invokes inference', async () => {
       AI: { async run() { inferenceCalls++ } },
     }
     const body = JSON.stringify({ task: 'chem homework', image: 'data:image/jpeg;base64,/9j/2Q==' })
+    // Signed and otherwise valid, but it never expires.
+    const eternal = await new SignJWT({ role: 'authenticated' }).setProtectedHeader({ alg: 'EdDSA', kid: 'test' })
+      .setSubject('user').setIssuer(issuer).setAudience(issuer).sign(privateKey)
     for (const token of [
+      eternal,
       await sign({ role: 'anonymous' }, 'anonymous'),
       await sign({ role: 'anonymous' }, 'some-id'),
       await sign({ role: 'authenticated' }, 'anonymous'),

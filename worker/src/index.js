@@ -160,6 +160,8 @@ export default {
       if (!keys.has(env.JWKS_URL)) keys.set(env.JWKS_URL, createRemoteJWKSet(new URL(env.JWKS_URL)))
       const { payload } = await jwtVerify(token, keys.get(env.JWKS_URL), {
         issuer: env.AUTH_ISSUER, audience: env.AUTH_ISSUER, algorithms: ['EdDSA'],
+        // jose checks expiry only when the claim is there: a token must have one.
+        requiredClaims: ['sub', 'exp'],
       })
       // Neon Auth hands a signed token to signed-out visitors too (role and sub
       // both "anonymous"). It must never reach inference: anyone can fetch one.
