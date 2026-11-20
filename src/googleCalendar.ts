@@ -1,5 +1,11 @@
 // Browser-only Google Calendar (readonly) integration using the GIS token flow.
 //
+// Not used by any page right now. It needs Google Identity Services, which
+// index.html no longer loads (a third-party script would run on every page
+// for nothing) and vercel.json's Content-Security-Policy doesn't allow. To
+// bring this back, load https://accounts.google.com/gsi/client again and add
+// accounts.google.com and www.googleapis.com to that policy.
+//
 // Two phases:
 //   1. Authorization  — getAccessToken(): get a bearer token via GIS (popup/consent).
 //   2. Resource access — fetchTodayEvents(): plain fetch() with Authorization: Bearer.
