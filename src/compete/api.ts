@@ -7,11 +7,23 @@ import { listSessions, type SessionMeta } from '../db'
 import { summarizeFocus } from '../focus/types'
 import { localDay, type DailyTotal, type LiveSession } from './stats'
 
+// The headers of the last Data API request (the token among them), kept so a
+// closing page can still send one last request: by then there's no time to
+// fetch a token. See leaveOnExit.
+let lastHeaders: HeadersInit | undefined
+const remembering: typeof fetch = (input, init) => {
+  lastHeaders = init?.headers
+  return fetch(input, init)
+}
+
 const neon = createClient({
   // Signed out, requests carry an anonymous token, which reaches only the
   // guest functions of db/migrations/014: a room link works without signing in.
   auth: { url: import.meta.env.VITE_NEON_AUTH_URL, allowAnonymous: true },
-  dataApi: { url: import.meta.env.VITE_NEON_DATA_API_URL },
+  dataApi: {
+    url: import.meta.env.VITE_NEON_DATA_API_URL,
+    options: { global: { fetch: remembering } },
+  },
 })
 
 // The database refuses longer sessions, so don't keep offering them.
@@ -198,6 +210,24 @@ export async function guestBeat(code: string, secret: string, studyingSince: num
     studying: studyingSince === null ? null : new Date(studyingSince).toISOString(),
   })
   if (error) fail(error)
+}
+
+// Leaves a study room as the page closes, so the others see you go at once
+// rather than after 90 s. keepalive lets the request outlive the page.
+// Synchronous, with the token from the last request: there's no time to wait.
+export function leaveOnExit(code: string, guestSecret: string | null): void {
+  if (!lastHeaders) return
+  const headers = new Headers(lastHeaders)
+  headers.set('Content-Type', 'application/json')
+  const [fn, body] = guestSecret
+    ? ['guest_leave', { room_code: code, guest_secret: guestSecret }]
+    : ['leave_room', { room_code: code }]
+  void fetch(`${import.meta.env.VITE_NEON_DATA_API_URL}/rpc/${fn}`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(body),
+    keepalive: true,
+  }).catch(() => {})
 }
 
 export async function guestLeave(code: string, secret: string): Promise<void> {

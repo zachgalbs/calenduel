@@ -101,8 +101,20 @@ export function useRoom(code: string, studyingSince: number | null, guest: boole
     }
   }, [beat, load])
 
+  // Closing the tab leaves the table at once. The api module is loaded by the
+  // first beat; the page can't wait for an import as it goes.
+  const apiRef = useRef<Api | null>(null)
+  useEffect(() => {
+    void import('../compete/api').then((api) => (apiRef.current = api))
+    const leave = () => apiRef.current?.leaveOnExit(code, guest ? guestSecret() : null)
+    window.addEventListener('pagehide', leave)
+    return () => window.removeEventListener('pagehide', leave)
+  }, [code, guest])
+
   return { people, beatFailing }
 }
+
+type Api = typeof import('../compete/api')
 
 // Where a ?with= link leads, read every few seconds so it follows them into
 // and out of sessions. undefined while loading; null: nobody by that name.
