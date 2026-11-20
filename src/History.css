@@ -182,18 +182,12 @@
   margin-bottom: 2.5rem;
 }
 
-/* Books stand on the board; too many for one shelf scroll sideways. The
-   bottom padding hangs over the board (negative margin), so a book pulled
-   toward you can come down onto it and cast its shadow there; scrolling
-   would otherwise clip both. */
+/* Books stand on the board; too many for one shelf scroll sideways. */
 .shelf-books {
-  position: relative;
-  z-index: 1;
   display: flex;
   align-items: flex-end;
   gap: 6px;
-  padding: 30px 14px 12px;
-  margin-bottom: -12px;
+  padding: 18px 14px 0;
   overflow-x: auto;
   scrollbar-width: none;
 }
@@ -208,35 +202,21 @@
   border: 0;
   border-radius: 4px 4px 2px 2px;
   color: #fbf8f1;
-  box-shadow:
-    inset -4px 0 0 rgba(0, 0, 0, 0.12),
-    0 0 0 rgba(0, 0, 0, 0);
+  box-shadow: inset -4px 0 0 rgba(0, 0, 0, 0.12);
   cursor: pointer;
-  position: relative;
-  /* Tipped and pulled from its foot, the way you take a book off a shelf. */
-  transform-origin: 50% 100%;
-  transform: perspective(700px) translate3d(0, 0, 0) rotateX(0deg);
   transition:
-    transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
-    box-shadow 0.3s cubic-bezier(0.2, 0.8, 0.2, 1),
+    transform 0.45s cubic-bezier(0.3, 0.7, 0.2, 1),
     filter 0.2s ease;
 }
 
-/* A fingertip on the top of the spine: it tips toward you a little. */
 .shelf-book:hover {
   filter: brightness(1.06);
-  transform: perspective(700px) translate3d(0, 0, 6px) rotateX(-4deg);
+  transform: translateY(-4px);
 }
 
-/* The open book is pulled out toward you: nearer, so bigger, tipped at
-   the top, standing a little in front of the shelf, with its shadow on
-   the board and the books beside it. */
+/* The open book is pulled up off the shelf. */
 .shelf-book[data-open='true'] {
-  z-index: 1;
-  transform: perspective(700px) translate3d(0, 7px, 46px) rotateX(-6deg);
-  box-shadow:
-    inset -4px 0 0 rgba(0, 0, 0, 0.12),
-    0 16px 22px -8px rgba(0, 0, 0, 0.45);
+  transform: translateY(-16px);
 }
 
 .shelf-book:focus-visible {
@@ -281,7 +261,7 @@
   border: 0;
   background: none;
   cursor: pointer;
-  transition: transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  transition: transform 0.45s cubic-bezier(0.3, 0.7, 0.2, 1);
 }
 
 .shelf-pile:hover {
