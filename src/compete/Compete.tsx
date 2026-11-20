@@ -30,7 +30,6 @@ import {
 import CopyLink from '../room/CopyLink'
 import { XIcon } from '../icons'
 import { useUndoable } from '../useUndoable'
-import Avatar from '../Avatar'
 import './Compete.css'
 
 const REFRESH_MS = 60_000
@@ -136,32 +135,71 @@ function lastStudied(day: string | null, today: string): string {
     : `Studied ${date.toLocaleDateString([], { month: 'short', day: 'numeric' })}`
 }
 
-// Seven small bars, oldest to today, on one scale for everyone on the page.
-function WeekBars({ week, scaleMs }: { week: number[]; scaleMs: number }) {
-  const total = week.reduce((a, b) => a + b, 0)
+// How dark a day's square is: nothing, then under 45m, 1½h, 3h, and more.
+function heatLevel(ms: number): number {
+  const min = ms / 60_000
+  return ms <= 0 ? 0 : min < 45 ? 1 : min < 90 ? 2 : min < 180 ? 3 : 4
+}
+
+// Four weeks of squares, a column of seven per week, today last.
+function Heatmap({ days, today, live }: { days: number[]; today: string; live: boolean }) {
+  const total = days.reduce((a, b) => a + b, 0)
+  const weeks = [0, 7, 14, 21].map((from) => days.slice(from, from + 7))
   return (
-    <span className="week-bars" role="img" aria-label={`${formatStudyTime(total)} this week`}>
-      {week.map((ms, i) => (
-        <span
-          key={i}
-          className="week-bar"
-          data-today={i === week.length - 1}
-          style={{ height: ms > 0 ? `${Math.max(12, Math.round((100 * ms) / scaleMs))}%` : undefined }}
-        />
+    <span className="heat" role="img" aria-label={`${formatStudyTime(total)} in 4 weeks`}>
+      {weeks.map((week, w) => (
+        <span key={w} className="heat-week">
+          {week.map((ms, i) => {
+            const index = w * 7 + i
+            const isToday = index === days.length - 1
+            const day = addDays(today, index - (days.length - 1))
+            return (
+              <span
+                key={i}
+                className="heat-day"
+                data-level={heatLevel(ms)}
+                data-today={isToday || undefined}
+                data-live={(isToday && live) || undefined}
+                title={`${shortDay(day)} · ${ms > 0 ? formatStudyTime(ms) : '–'}`}
+              />
+            )
+          })}
+        </span>
       ))}
     </span>
   )
 }
 
+// The dates the four heatmap columns start on.
+function HeatHead({ today }: { today: string }) {
+  return (
+    <div className="friend-head" aria-hidden="true">
+      <span />
+      <span className="heat">
+        {[27, 20, 13, 6].map((back) => (
+          <span key={back}>
+            {new Date(`${addDays(today, -back)}T12:00:00`).toLocaleDateString([], {
+              month: 'short',
+              day: 'numeric',
+            })}
+          </span>
+        ))}
+      </span>
+      <span>4 wks</span>
+      <span>Streak</span>
+      <span />
+    </div>
+  )
+}
+
 type Status = { kind: 'studying' | 'break'; ms: number } | null
 
-// One friend, one line: who, what they're doing or when they last studied,
-// their week, and a way in. Opening it shows the rest.
+// One friend, one line: who, four weeks of squares, the totals, and a way in.
+// Opening it shows the rest.
 function FriendRow({
   friend,
   summary,
   status,
-  scaleMs,
   today,
   joinCode,
   onJoin,
@@ -170,7 +208,6 @@ function FriendRow({
   friend: Friend
   summary: WeekSummary
   status: Status
-  scaleMs: number
   today: string
   joinCode: string | null
   onJoin: (code: string) => void
@@ -183,14 +220,9 @@ function FriendRow({
     onRemoved()
   })
 
+  // Only what's happening now; the squares say the rest.
   const line =
-    status?.kind === 'studying'
-      ? `Studying · ${formatStudyTime(status.ms)}`
-      : status?.kind === 'break'
-        ? 'On a break'
-        : summary.todayMs > 0
-          ? `${formatStudyTime(summary.todayMs)} today`
-          : lastStudied(summary.lastDay, today)
+    status?.kind === 'studying' ? formatStudyTime(status.ms) : status?.kind === 'break' ? 'Break' : null
 
   if (removal.pending) {
     return (
@@ -207,18 +239,19 @@ function FriendRow({
     <li className="friend-row" data-live={status !== null}>
       <details onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary className="friend-line reveal">
-          <Avatar name={friend.name} src={friend.avatar} size={36} />
           <span className="friend-who">
             <span className="friend-name">
               {friend.name}
               <LiveDot on={status?.kind === 'studying'} />
             </span>
-            <span className="friend-status">{line}</span>
+            {line && <span className="friend-status">{line}</span>}
           </span>
-          <WeekBars week={summary.week} scaleMs={scaleMs} />
-          {/* The slot is always there, so the week bars line up row to row. */}
+          <Heatmap days={summary.days} today={today} live={status?.kind === 'studying'} />
+          <span className="friend-num">{summary.daysMs > 0 ? formatStudyTime(summary.daysMs) : '–'}</span>
+          <span className="friend-num">{summary.streak > 0 ? `${summary.streak}d` : '–'}</span>
+          {/* Join, or else Remove on hover: the slot is always there, so columns line up. */}
           <span className="friend-join">
-            {joinCode && (
+            {joinCode ? (
               <button
                 type="button"
                 className="compete-btn primary"
@@ -229,20 +262,21 @@ function FriendRow({
               >
                 Join
               </button>
+            ) : (
+              <button
+                type="button"
+                className="icon-btn reveal-item"
+                aria-label={`Remove ${friend.name}`}
+                title="Remove friend"
+                onClick={(e) => {
+                  e.preventDefault() // not also open the row
+                  removal.start()
+                }}
+              >
+                <XIcon size={12} />
+              </button>
             )}
           </span>
-          <button
-            type="button"
-            className="icon-btn reveal-item"
-            aria-label={`Remove ${friend.name}`}
-            title="Remove friend"
-            onClick={(e) => {
-              e.preventDefault() // not also open the row
-              removal.start()
-            }}
-          >
-            <XIcon size={12} />
-          </button>
         </summary>
 
         {open && (
@@ -253,8 +287,8 @@ function FriendRow({
                 <dd>{formatStudyTime(summary.weekMs)}</dd>
               </div>
               <div>
-                <dt>Streak</dt>
-                <dd>{plural(summary.streak, 'day')}</dd>
+                <dt>Last studied</dt>
+                <dd>{lastStudied(summary.lastDay, today)}</dd>
               </div>
               <div>
                 <dt>Focus</dt>
@@ -439,20 +473,16 @@ export default function Compete({
         status: statusOf(f.id),
       }))
     : []
-  // Who's here first, then who studied today, then the rest of the week.
-  // Anyone with nothing all week folds away into one line.
+  // Who you can join first, then whoever has studied most in four weeks.
+  // Anyone with nothing in all four folds away into one line.
   const rank = (r: (typeof rows)[number]) =>
     r.status?.kind === 'studying' ? 2 : r.status?.kind === 'break' ? 1 : 0
   const active = rows
-    .filter((r) => r.status !== null || r.summary.weekMs > 0)
-    .sort(
-      (a, b) =>
-        rank(b) - rank(a) ||
-        b.summary.todayMs - a.summary.todayMs ||
-        b.summary.weekMs - a.summary.weekMs,
-    )
-  const quiet = rows.filter((r) => r.status === null && r.summary.weekMs === 0)
-  const scaleMs = Math.max(1, ...active.flatMap((r) => r.summary.week))
+    .filter((r) => r.status !== null || r.summary.daysMs > 0)
+    .sort((a, b) => rank(b) - rank(a) || b.summary.daysMs - a.summary.daysMs)
+  const quiet = rows.filter((r) => r.status === null && r.summary.daysMs === 0)
+  const studyingNow = rows.filter((r) => r.status?.kind === 'studying').length
+  const studiedToday = rows.filter((r) => r.status?.kind === 'studying' || r.summary.todayMs > 0).length
 
   return (
     <main className="compete">
@@ -489,6 +519,15 @@ export default function Compete({
 
           {board.friends.length > 0 && (
             <section className="compete-section">
+              <p className="friend-pulse">
+                {studyingNow > 0 && (
+                  <span className="friend-pulse-live">
+                    <LiveDot on /> {studyingNow} studying ·{' '}
+                  </span>
+                )}
+                {studiedToday} of {board.friends.length} today
+              </p>
+              {active.length > 0 && <HeatHead today={board.today} />}
               {active.length > 0 ? (
                 <ul className="friend-rows">
                   {active.map((r) => (
@@ -497,7 +536,6 @@ export default function Compete({
                       friend={r.friend}
                       summary={r.summary}
                       status={r.status}
-                      scaleMs={scaleMs}
                       today={board.today}
                       joinCode={
                         rooms.has(r.friend.id) && rooms.get(r.friend.id) !== room
@@ -510,12 +548,12 @@ export default function Compete({
                   ))}
                 </ul>
               ) : (
-                <p className="compete-note">Nobody's studied this week yet.</p>
+                <p className="compete-note">Nobody's studied in 4 weeks.</p>
               )}
 
               {quiet.length > 0 && (
                 <details className="friend-quiet">
-                  <summary>{plural(quiet.length, 'friend')} quiet this week</summary>
+                  <summary>{plural(quiet.length, 'friend')} quiet for 4 weeks</summary>
                   <ul className="friend-rows">
                     {quiet.map((r) => (
                       <FriendRow
@@ -523,8 +561,7 @@ export default function Compete({
                         friend={r.friend}
                         summary={r.summary}
                         status={null}
-                        scaleMs={scaleMs}
-                        today={board.today}
+                          today={board.today}
                         joinCode={null}
                         onJoin={onJoin}
                         onRemoved={refresh}

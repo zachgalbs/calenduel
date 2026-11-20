@@ -295,6 +295,14 @@ describe('weekSummary', () => {
     expect(s.todayMs).toBe(30 * 60_000)
   })
 
+  it('lays out four weeks for the heatmap, today last', () => {
+    const s = weekSummary([t('2026-11-19', 30), t('2026-10-23', 15), t('2026-10-22', 99)], 'a', '2026-11-19')
+    expect(s.days).toHaveLength(28)
+    expect(s.days[0] / 60_000).toBe(15)
+    expect(s.days[27] / 60_000).toBe(30)
+    expect(s.daysMs).toBe(45 * 60_000)
+  })
+
   it('remembers the last day studied, even beyond the week', () => {
     expect(weekSummary([t('2026-11-01', 20)], 'a', '2026-11-19').lastDay).toBe('2026-11-01')
     expect(weekSummary([], 'a', '2026-11-19').lastDay).toBeNull()

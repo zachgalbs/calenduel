@@ -4,7 +4,7 @@
 
 .compete {
   width: 100%;
-  max-width: 34rem;
+  max-width: 44rem; /* wider than Sessions, for four weeks of squares */
   margin: 0 auto;
   padding: clamp(4.5rem, 13vh, 9rem) 1.5rem 6rem;
 }
@@ -63,11 +63,18 @@
   border-top: 1px solid var(--border);
 }
 
+/* One set of columns for the header and every row, so they line up:
+   name, four weeks, 4-week total, streak, Join (or Remove). */
+.friend-head,
 .friend-line {
-  display: flex;
+  display: grid;
+  grid-template-columns: minmax(4.5rem, 6.5rem) minmax(0, 1fr) 3.6rem 2.2rem 3.4rem;
   align-items: center;
-  gap: 0.85rem;
-  padding: 0.7rem 0.25rem;
+  column-gap: 0.75rem;
+}
+
+.friend-line {
+  padding: 0.6rem 0.25rem;
   cursor: pointer;
   list-style: none;
 }
@@ -87,7 +94,6 @@
 }
 
 .friend-who {
-  flex: 1;
   min-width: 0;
   display: flex;
   flex-direction: column;
@@ -112,41 +118,97 @@
   color: var(--live);
 }
 
-/* The week: seven bars, today darkest, on one scale for the whole page. */
-.week-bars {
-  display: flex;
-  align-items: flex-end;
-  gap: 3px;
-  width: 62px;
-  height: 22px;
-  flex: none;
+/* ── Four weeks of squares ── */
+
+.friend-pulse {
+  font-size: 13px;
+  color: var(--text);
+  margin-bottom: 1.25rem;
 }
 
-.week-bar {
-  flex: 1;
-  height: 2px;
-  border-radius: 1.5px;
-  background: var(--border-strong);
+.friend-pulse-live {
+  color: var(--live);
 }
 
-.week-bar[style] {
-  background: var(--accent-border);
+.friend-pulse .live-dot {
+  margin: 0 4px 0 0;
 }
 
-.week-bar[data-today='true'][style] {
-  background: var(--accent);
+.friend-head {
+  padding: 0 0.25rem 0.5rem;
+  font-size: 10.5px;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-mute);
+  white-space: nowrap;
+}
+
+.friend-head > span:nth-child(n + 3) {
+  text-align: right;
+}
+
+.heat {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 5px;
+}
+
+.heat-week {
+  display: grid;
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+  gap: 2px;
+}
+
+.heat-day {
+  aspect-ratio: 1;
+  max-width: 14px;
+  border-radius: 2px;
+  background: var(--border);
+}
+
+.heat-day[data-level='1'] { background: color-mix(in srgb, var(--accent) 30%, var(--bg)); }
+.heat-day[data-level='2'] { background: color-mix(in srgb, var(--accent) 55%, var(--bg)); }
+.heat-day[data-level='3'] { background: color-mix(in srgb, var(--accent) 82%, var(--bg)); }
+.heat-day[data-level='4'] { background: color-mix(in srgb, var(--accent) 75%, var(--text-h)); }
+
+.heat-day[data-today] {
+  outline: 1.5px solid var(--text);
+  outline-offset: 1px;
+}
+
+/* Studying right now: today's square goes green. */
+.heat-day[data-live] {
+  background: var(--live);
+  outline-color: var(--live);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .heat-day[data-live] {
+    animation: heat-breathe 2.4s ease-in-out infinite;
+  }
+
+  @keyframes heat-breathe {
+    50% { opacity: 0.55; }
+  }
+}
+
+.friend-num {
+  text-align: right;
+  font-family: var(--mono);
+  font-size: 12.5px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-h);
+  white-space: nowrap;
 }
 
 .friend-join {
-  flex: none;
-  width: 4rem;
   display: flex;
   justify-content: flex-end;
 }
 
 /* Opened: the rest, quietly. */
 .friend-more {
-  padding: 0.25rem 0.25rem 1rem calc(36px + 1.1rem);
+  padding: 0.25rem 0.25rem 1rem;
 }
 
 .friend-facts {
@@ -197,9 +259,22 @@
   .friend-facts {
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
+}
 
-  .friend-more {
-    padding-left: 0.25rem;
+/* Narrow: the squares get their own full-width line under the name. */
+@media (max-width: 560px) {
+  .friend-head {
+    display: none;
+  }
+
+  .friend-line {
+    grid-template-columns: minmax(0, 1fr) 3.6rem 2.2rem 3.4rem;
+    row-gap: 0.5rem;
+  }
+
+  .friend-line .heat {
+    grid-column: 1 / -1;
+    grid-row: 2;
   }
 }
 

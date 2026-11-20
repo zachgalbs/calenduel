@@ -221,8 +221,13 @@ export function formatStudyTime(ms: number): string {
 }
 
 // One person's last week at a glance, for a row on the Friends page.
+// How far back the Friends heatmap reaches: four whole weeks, today last.
+export const HEATMAP_DAYS = 28
+
 export interface WeekSummary {
   todayMs: number
+  days: number[] // the last HEATMAP_DAYS days, oldest first, today last
+  daysMs: number // their total
   weekMs: number // the last 7 days, today included
   week: number[] // those 7 days, oldest first, today last
   lastDay: string | null // the most recent day with any study, ever
@@ -236,6 +241,8 @@ export function weekSummary(totals: DailyTotal[], userId: string, today: string)
   const from = addDays(today, -(RECENT_DAYS - 1))
   const week: number[] = []
   for (let i = RECENT_DAYS - 1; i >= 0; i--) week.push(byDay.get(addDays(today, -i)) ?? 0)
+  const days: number[] = []
+  for (let i = HEATMAP_DAYS - 1; i >= 0; i--) days.push(byDay.get(addDays(today, -i)) ?? 0)
   let lastDay: string | null = null
   for (const day of byDay.keys()) if (lastDay === null || day > lastDay) lastDay = day
   const focus = focusSince(
@@ -245,6 +252,8 @@ export function weekSummary(totals: DailyTotal[], userId: string, today: string)
   )
   return {
     todayMs: byDay.get(today) ?? 0,
+    days,
+    daysMs: days.reduce((a, b) => a + b, 0),
     weekMs: week.reduce((a, b) => a + b, 0),
     week,
     lastDay,
