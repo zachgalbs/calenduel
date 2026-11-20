@@ -476,13 +476,11 @@ export default function Compete({
     )
   const quiet = rows.filter((r) => r.status === null && r.summary.weekMs === 0)
   const scaleMs = Math.max(1, ...active.flatMap((r) => r.summary.week))
-  const myToday = board ? weekSummary(totals, board.profile.id, board.today).todayMs : 0
 
   return (
     <main className="compete">
       <header className="compete-head">
         <h1>Friends</h1>
-        {board && <span className="compete-me">You · {formatStudyTime(myToday)} today</span>}
       </header>
 
       {error && <p className="compete-error" role="alert">{error}</p>}

@@ -50,12 +50,6 @@
   margin: 0;
 }
 
-.compete-me {
-  font-size: 13px;
-  color: var(--text);
-  white-space: nowrap;
-}
-
 .friend-rows {
   list-style: none;
   padding: 0;
