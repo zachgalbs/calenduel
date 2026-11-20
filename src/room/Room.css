@@ -128,3 +128,10 @@
     transition: none;
   }
 }
+
+/* Signed out at a friend's link: said once, quietly, with a way to sign in. */
+.room-guest-note {
+  margin: 0.5rem 0 0;
+  font-size: 13px;
+  opacity: 0.75;
+}

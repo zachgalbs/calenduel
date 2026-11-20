@@ -8,6 +8,7 @@ import {
   joinableRooms,
   listFriends,
   liveTimes,
+  personLink,
   removeFriend,
   signIn,
   signOut,
@@ -28,6 +29,7 @@ import {
   type LiveSession,
   type WeekSummary,
 } from './stats'
+import CopyLink from '../room/CopyLink'
 import Avatar from '../Avatar'
 import './Compete.css'
 
@@ -517,11 +519,11 @@ export default function Compete({
           )}
 
           {/* Friends are people you've studied with: joining someone's
-              room, or them joining yours, is what connects you. */}
+              table, or them joining yours, is what connects you. */}
           {board.friends.length === 0 && (
             <p className="compete-lead">
-              Send someone your link while you're studying. Once they join, you're
-              friends.
+              Send someone your link. When they join you while you're studying,
+              you're friends.
             </p>
           )}
 
@@ -574,9 +576,16 @@ export default function Compete({
             </section>
           )}
 
-          <button type="button" className="compete-link" onClick={handleSignOut}>
-            Sign out {board.profile.name}
-          </button>
+          <div className="compete-foot">
+            <CopyLink
+              link={personLink(board.profile.name)}
+              className="compete-link"
+              label="Copy your link"
+            />
+            <button type="button" className="compete-link" onClick={handleSignOut}>
+              Sign out {board.profile.name}
+            </button>
+          </div>
         </>
       )}
     </main>

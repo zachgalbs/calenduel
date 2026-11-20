@@ -8,7 +8,9 @@ import { summarizeFocus } from '../focus/types'
 import { localDay, type DailyTotal, type LiveSession } from './stats'
 
 const neon = createClient({
-  auth: { url: import.meta.env.VITE_NEON_AUTH_URL },
+  // Signed out, requests carry an anonymous token, which reaches only the
+  // guest functions of db/migrations/014: a room link works without signing in.
+  auth: { url: import.meta.env.VITE_NEON_AUTH_URL, allowAnonymous: true },
   dataApi: { url: import.meta.env.VITE_NEON_DATA_API_URL },
 })
 
@@ -122,30 +124,85 @@ export async function listFriends(): Promise<Friend[]> {
   }))
 }
 
-// Study rooms (db/migrations/010, 012): every signed-in session is in one, and
-// friends can join it.
-export interface RoomPreview {
-  hostName: string
-  members: number
-  started: boolean
-  joined: boolean
-  expired: boolean
-}
+// Study rooms (db/migrations/010, 013, 014): every signed-in session is in
+// one, friends can join it, and anyone with your ?with= link can sit in, as a
+// guest if signed out. A room disbands when the last person leaves.
 
-export interface RoomMember {
+// Someone at a study table; live = their lamp is lit.
+export interface TableSeat {
   id: string
   name: string
   avatar: string | null
-  isHost: boolean
-  here: boolean // has a session open in the room
-  liveSince: number | null // start of a session running now
-  bankedMs: number // time already studied in this room
+  live: boolean
 }
 
-export interface RoomState {
-  hostName: string
-  startedAt: number | null
-  members: RoomMember[]
+// Who's at the table of a room you're in, or null once it has disbanded.
+export async function roomPeek(code: string): Promise<TableSeat[] | null> {
+  const { data, error } = await neon.rpc('room_peek', { room_code: code })
+  if (error) fail(error)
+  return data ? (data as { people: TableSeat[] }).people : null
+}
+
+// What a ?with=<username> link leads to: who that is, and while they're in a
+// session, their room and its table. Open to anyone holding the link.
+export interface PersonPeek {
+  name: string
+  avatar: string | null
+  isMe: boolean
+  room: string | null // null: not in a session right now
+  joined: boolean // you (or this browser's guest) are at that table already
+  people: TableSeat[]
+}
+
+export async function personPeek(username: string, guestSecret: string | null): Promise<PersonPeek | null> {
+  const { data, error } = await neon.rpc('person_peek', { username, guest_secret: guestSecret })
+  if (error) fail(error)
+  const row = data as {
+    name: string
+    avatar: string | null
+    is_me: boolean
+    room: string | null
+    joined: boolean
+    people: TableSeat[]
+  } | null
+  return row
+    ? { name: row.name, avatar: row.avatar, isMe: row.is_me, room: row.room, joined: row.joined, people: row.people }
+    : null
+}
+
+// Your username, which is also your name everywhere and your link. Returns it
+// as stored (lowercase); throws with the reason if it's taken or malformed.
+export async function setUsername(username: string): Promise<string> {
+  const { data, error } = await neon.rpc('set_username', { username })
+  if (error) fail(error)
+  return data as string
+}
+
+// The link that brings someone to study with you.
+export function personLink(username: string): string {
+  return `${window.location.origin}/?with=${encodeURIComponent(username)}`
+}
+
+// Guests: signed out, at a friend's table. The secret is this browser's own
+// (see room/guest.ts); the returned id is the one everyone else sees.
+export async function guestJoin(code: string, secret: string): Promise<string> {
+  const { data, error } = await neon.rpc('guest_join', { room_code: code, guest_secret: secret })
+  if (error) fail(error)
+  return data as string
+}
+
+export async function guestBeat(code: string, secret: string, studyingSince: number | null): Promise<void> {
+  const { error } = await neon.rpc('guest_beat', {
+    room_code: code,
+    guest_secret: secret,
+    studying: studyingSince === null ? null : new Date(studyingSince).toISOString(),
+  })
+  if (error) fail(error)
+}
+
+export async function guestLeave(code: string, secret: string): Promise<void> {
+  const { error } = await neon.rpc('guest_leave', { room_code: code, guest_secret: secret })
+  if (error) fail(error)
 }
 
 export async function createRoom(): Promise<string> {
@@ -154,51 +211,11 @@ export async function createRoom(): Promise<string> {
   return data as string
 }
 
-export async function roomPreview(code: string): Promise<RoomPreview | null> {
-  const { data, error } = await neon.rpc('room_preview', { room_code: code })
-  if (error) fail(error)
-  const row = (
-    data as { host_name: string; members: number; started: boolean; joined: boolean; expired: boolean }[]
-  )[0]
-  return row
-    ? { hostName: row.host_name, members: row.members, started: row.started, joined: row.joined, expired: row.expired }
-    : null
-}
-
 // Joins, and connects with everyone in the room. Returns how many new friends.
 export async function joinRoom(code: string): Promise<number> {
   const { data, error } = await neon.rpc('join_room', { room_code: code })
   if (error) fail(error)
   return data as number
-}
-
-export async function roomState(code: string): Promise<RoomState> {
-  const { data, error } = await neon.rpc('room_state', { room_code: code })
-  if (error) fail(error)
-  const rows = data as {
-    user_id: string
-    display_name: string
-    avatar: string | null
-    is_host: boolean
-    here: boolean
-    live_since: string | null
-    banked_ms: number | string
-    host_name: string
-    started_at: string | null
-  }[]
-  return {
-    hostName: rows[0]?.host_name ?? '',
-    startedAt: rows[0]?.started_at ? Date.parse(rows[0].started_at) : null,
-    members: rows.map((r) => ({
-      id: r.user_id,
-      name: r.display_name,
-      avatar: r.avatar,
-      isHost: r.is_host,
-      here: r.here,
-      liveSince: r.live_since ? Date.parse(r.live_since) : null,
-      bankedMs: Number(r.banked_ms),
-    })),
-  }
 }
 
 // "I'm here", with the start of my running session, or null between sessions.

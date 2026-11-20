@@ -16,6 +16,8 @@ import {
 } from './session/activeSession'
 import RoomPanel, { SoloTable } from './room/RoomPanel'
 import RoomInvite from './room/RoomInvite'
+import { guestSecret } from './room/guest'
+import { saveSeat, savedSeat, type Seat } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
 import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
 
@@ -67,16 +69,23 @@ function describe(e: unknown): string {
 }
 
 export default function SessionTimer({
-  room = null,
+  withUser = null,
+  onDismissWith,
+  joinCode = null,
+  onJoined,
   onRoomChange,
   autoStart = false,
   onAutoStarted,
   onActiveChange,
   onSessionSaved,
 }: {
-  // The study room: the one this tab's sessions are in, or one a link or a
-  // Join click brought us to. Kept in the URL, so that URL is the invite.
-  room?: string | null
+  // Whose ?with= link brought us here: Enter studies at their table.
+  withUser?: string | null
+  onDismissWith: () => void
+  // A friend's room from a Join click on Friends: the next start joins it.
+  joinCode?: string | null
+  onJoined?: () => void
+  // The room this tab sits in, so Friends can leave out its Join button.
   onRoomChange: (code: string | null) => void
   // Start straight away: Compete's Join click brought us here.
   autoStart?: boolean
@@ -96,10 +105,16 @@ export default function SessionTimer({
   // That's what the study room gets: it banks each stretch when it ends, so
   // sending the session's start again after a break would count time twice.
   const [stretchFrom, setStretchFrom] = useState<number | null>(null)
-  // The room this tab has actually joined or created. Until it matches `room`,
-  // that room is only an invitation.
-  const [joinedRoom, setJoinedRoom] = useState<string | null>(null)
-  const inRoom = room !== null && joinedRoom === room
+  // The room this session sits in, and how: signed in, or as a guest. Kept
+  // through a refresh (sessionStorage), so resuming finds the same table.
+  const [seat, setSeat] = useState<Seat | null>(savedSeat)
+  // The room the last session left, so the next can rejoin it if the others
+  // are still at it.
+  const lastSeatRef = useRef<Seat | null>(null)
+  useEffect(() => {
+    saveSeat(seat)
+    onRoomChange(seat?.room ?? null)
+  }, [seat, onRoomChange])
   const still = useStill(status === 'running')
   const [clip, setClip] = useState<Blob | null>(null)
   const [error, setError] = useState<string | null>(null)
@@ -156,7 +171,7 @@ export default function SessionTimer({
           ...liveSpan(startedAt, pause, status === 'running' ? null : stoppedAt),
           day: localDay(startedAt), // the day the upload is filed under
           startedAt, // lets the database drop this once the upload exists
-          room: status === 'running' && inRoom ? room : null,
+          room: status === 'running' && seat && !seat.guest ? seat.room : null,
         }
       : null,
   )
@@ -243,41 +258,66 @@ export default function SessionTimer({
   }
 
   // Every signed-in session is in a study room, so friends can always join.
-  // In the background: the session is already running, and a room that can't
-  // be reached just means studying alone.
-  //   - A room from a link or a Join click: join it.
-  //   - This tab's room from an earlier session: stay only if someone else is
-  //     still studying in it. Otherwise it's over, and a fresh one starts.
-  //   - No room: make one.
+  // Signed out, you can still sit at someone's table from their link, as a
+  // guest. In the background: the session is already running, and a room
+  // that can't be reached just means studying alone. In order:
+  //   - A friend's room from a Join click.
+  //   - The room of whoever's ?with= link brought us here, if they're in one.
+  //   - The room this tab was in (a refresh, or the last session), if
+  //     someone else is still studying in it.
+  //   - A new room of your own (signed in only; a guest studies alone).
   function enterRoom() {
-    const current = room
-    const leftover = current !== null && current === joinedRoom
+    const previous = seat ?? lastSeatRef.current
+    const clicked = joinCode
+    if (clicked) onJoined?.()
     void (async () => {
       const api = await import('./compete/api')
-      if (!(await api.isSignedIn())) {
-        if (current) onRoomChange(null)
-        return
+      const signedIn = await api.isSignedIn()
+      const me = signedIn ? (await api.ensureProfile()).id : null
+      const secret = signedIn ? null : guestSecret()
+
+      let target: string | null = clicked
+      if (!target && withUser) {
+        const person = await api.personPeek(withUser, secret).catch(() => null)
+        if (person && !person.isMe) target = person.room
       }
-      if (current) {
+      if (!target && previous && previous.guest === !me) {
+        const people = await api.roomPeek(previous.room).catch(() => null)
+        if (people?.some((p) => p.id !== previous.selfId && p.live)) target = previous.room
+      }
+
+      if (target) {
         try {
-          let stay = true
-          if (leftover) {
-            const [me, state] = await Promise.all([api.ensureProfile(), api.roomState(current)])
-            stay = state.members.some((m) => m.id !== me.id && m.liveSince !== null)
+          if (me) {
+            await api.joinRoom(target) // idempotent; also friends you with everyone in it
+            setSeat({ room: target, selfId: me, guest: false })
+          } else {
+            const id = await api.guestJoin(target, guestSecret())
+            setSeat({ room: target, selfId: id, guest: true })
           }
-          if (stay) {
-            await api.joinRoom(current) // idempotent; also friends you with everyone in it
-            setJoinedRoom(current)
-            return
-          }
+          return
         } catch (err) {
-          console.error('joining the study room failed; making a new one', err)
+          console.error('joining the study room failed', err)
         }
       }
-      const code = await api.createRoom()
-      onRoomChange(code)
-      setJoinedRoom(code)
+      if (!me) {
+        setSeat(null)
+        return
+      }
+      setSeat({ room: await api.createRoom(), selfId: me, guest: false })
     })().catch((err) => console.error('study room failed', err))
+  }
+
+  // Stopping leaves the table: the others see you go, not a dark lamp (a
+  // break keeps you seated), and the last one out disbands the room.
+  function leaveRoom() {
+    if (!seat) return
+    const { room: code, guest } = seat
+    lastSeatRef.current = seat
+    setSeat(null)
+    void import('./compete/api')
+      .then((api) => (guest ? api.guestLeave(code, guestSecret()) : api.leaveRoom(code)))
+      .catch((err) => console.error('leaving the study room failed', err))
   }
 
   function handleResume() {
@@ -318,6 +358,7 @@ export default function SessionTimer({
     const stopAt = Date.now()
     setStoppedAt(stopAt) // freezes the stopwatch on the final time
     setStatus('encoding')
+    leaveRoom()
     // Every step below is allowed to fail, but none may leave Stop hanging:
     // the study time is what matters most, the clip comes second.
     const ended = await end().catch((e: unknown) => ({
@@ -520,10 +561,6 @@ export default function SessionTimer({
         )}
       </div>
 
-      {status === 'idle' && room && !inRoom && (
-        <RoomInvite code={room} onDismiss={() => onRoomChange(null)} />
-      )}
-
       {status === 'idle' && interrupted && (
         <div className="session-recover" role="status">
           <p>
@@ -552,17 +589,22 @@ export default function SessionTimer({
       {notice && <p className="session-notice" role="status">{notice}</p>}
       {error && <p className="error">{error}</p>}
 
-      {inRoom && room ? (
-        <RoomPanel
-          code={room}
-          studyingSince={status === 'running' && !paused ? stretchFrom : null}
-          onLamp={lampSwitch}
-          lampLabel={lampLabel}
-        />
-      ) : (
-        status === 'running' && (
+      {status === 'running' &&
+        (seat ? (
+          <RoomPanel
+            code={seat.room}
+            selfId={seat.selfId}
+            guest={seat.guest}
+            studyingSince={paused ? null : stretchFrom}
+            onLamp={lampSwitch}
+            lampLabel={lampLabel}
+          />
+        ) : (
           <SoloTable studying={!paused} onLamp={lampSwitch} lampLabel={lampLabel} />
-        )
+        ))}
+
+      {status === 'idle' && withUser && (
+        <RoomInvite username={withUser} onDismiss={onDismissWith} />
       )}
     </section>
   )

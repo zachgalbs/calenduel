@@ -3,7 +3,7 @@ import SessionTimer from './SessionTimer'
 import History from './History'
 import Account from './account/Account'
 import PageBoundary from './PageBoundary'
-import { roomFromUrl, saveRoom, savedRoom } from './room/useRoom'
+import { withFromUrl } from './room/useRoom'
 import './App.css'
 
 // The auth and database SDK is big and only the friends features use it, so
@@ -21,13 +21,13 @@ function isPage(value: string | null): value is Page {
 }
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
-// Study room links land on the timer, ready to join (old ?invite= links, from
+// ?with= links land on the timer, ready to study together (old ?invite= links, from
 // before friends came only from studying together, land on Friends); the
 // return trip from Google sign-in keeps the tab it left from.
 // ?tab=compete is the page's old name, still in older links and bookmarks.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
-  if (roomFromUrl()) return 'timer'
+  if (withFromUrl()) return 'timer'
   if (params.has('invite')) return 'friends'
   const tab = params.get('tab')
   if (tab === 'compete') return 'friends'
@@ -79,16 +79,17 @@ function App() {
     return () => window.removeEventListener('keydown', onKey)
   }, [sessionActive])
   const [historyKey, setHistoryKey] = useState(0)
-  // The study room this tab is in, or is about to join (see room/useRoom.ts).
-  // Every signed-in session has one; SessionTimer creates it on Start.
-  const [room, setRoom] = useState<string | null>(() => roomFromUrl() ?? savedRoom())
-  // Set by a Join click on Friends: the timer starts on arrival, while that click
-  // still counts as the gesture the screen picker needs.
+  // Whose ?with= link brought us here (see room/useRoom.ts). Stays in the
+  // URL until dismissed, so a refresh still offers their table.
+  const [withUser, setWithUser] = useState<string | null>(withFromUrl)
+  // The study room this tab's session sits in, as SessionTimer reports it:
+  // Friends leaves out the Join button for it.
+  const [room, setRoom] = useState<string | null>(null)
+  // A friend's room from a Join click on Friends, and that the timer starts
+  // on arrival, while that click still counts as the gesture the screen
+  // picker needs.
+  const [joinCode, setJoinCode] = useState<string | null>(null)
   const [autoStart, setAutoStart] = useState(false)
-  
-  useEffect(() => {
-    saveRoom(room)
-  }, [room])
 
   // replaceState rather than a new history entry: switching tabs shouldn't
   // fill up the Back button. Other parameters, like an invite code, survive.
@@ -96,12 +97,12 @@ function App() {
     const params = new URLSearchParams(window.location.search)
     if (page === 'timer') params.delete('tab')
     else params.set('tab', page)
-    // The room rides along in the URL, so a refresh stays in it.
-    if (room) params.set('room', room)
-    else params.delete('room')
+    params.delete('room') // old study room links; rooms are found by person now
+    if (withUser) params.set('with', withUser)
+    else params.delete('with')
     const query = params.toString()
     window.history.replaceState(null, '', query ? `/?${query}` : '/')
-  }, [page, room])
+  }, [page, withUser])
 
   return (
     <>
@@ -147,7 +148,10 @@ function App() {
 
       {page === 'timer' && (
         <SessionTimer
-          room={room}
+          withUser={withUser}
+          onDismissWith={() => setWithUser(null)}
+          joinCode={joinCode}
+          onJoined={() => setJoinCode(null)}
           onRoomChange={setRoom}
           autoStart={autoStart}
           onAutoStarted={() => setAutoStart(false)}
@@ -172,7 +176,7 @@ function App() {
             <Compete
               room={room}
               onJoin={(code) => {
-                setRoom(code)
+                setJoinCode(code)
                 setAutoStart(true)
                 setPage('timer')
               }}

@@ -1,32 +1,29 @@
 import { useEffect, useState } from 'react'
-import type { RoomPreview } from '../compete/api'
+import StudyTable, { type TablePerson } from './StudyTable'
+import { useMe } from './useMe'
+import { usePersonPeek } from './useRoom'
 
-// Under the timer when a study room link brought you here: whose room it is,
-// and that starting joins it. Says nothing for a room you're already in (a
-// refresh), since starting just carries on there.
-export default function RoomInvite({ code, onDismiss }: { code: string; onDismiss: () => void }) {
+// Where the table goes when someone's ?with= link brought you here. While
+// they're studying: their table as it is, with your empty seat at it, and
+// that Enter joins them. No sign-in needed: signed out, you join as a guest.
+// Says nothing for your own link, or a table you're already at (a refresh).
+export default function RoomInvite({ username, onDismiss }: { username: string; onDismiss: () => void }) {
+  const peek = usePersonPeek(username)
+  const me = useMe()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
-  // undefined = still loading; null = no room has this code.
-  const [preview, setPreview] = useState<RoomPreview | null | undefined>(undefined)
 
   useEffect(() => {
     let closed = false
-    ;(async () => {
-      const api = await import('../compete/api')
-      const active = await api.isSignedIn()
-      if (closed) return
-      setSignedIn(active)
-      if (!active) return
-      const p = await api.roomPreview(code)
-      if (!closed) setPreview(p)
-    })().catch((err) => {
-      console.error('study room preview failed', err)
-      if (!closed) setPreview(null)
-    })
+    import('../compete/api')
+      .then((api) => api.isSignedIn())
+      .then((active) => {
+        if (!closed) setSignedIn(active)
+      })
+      .catch(() => {})
     return () => {
       closed = true
     }
-  }, [code])
+  }, [])
 
   async function handleSignIn() {
     try {
@@ -37,48 +34,48 @@ export default function RoomInvite({ code, onDismiss }: { code: string; onDismis
     }
   }
 
-  if (signedIn === null) return null
+  if (peek === undefined || signedIn === null || peek?.isMe || peek?.joined) return null
 
-  if (!signedIn) {
+  if (peek === null) {
     return (
+      <p className="session-notice" role="status">
+        Nobody goes by {username}. Starting studies on your own.
+      </p>
+    )
+  }
+
+  if (!peek.room) {
+    return (
+      <p className="session-notice" role="status">
+        {peek.name} isn't studying right now.
+      </p>
+    )
+  }
+
+  const people: TablePerson[] = [
+    { id: 'me', name: me.name, avatar: me.avatar, lit: false },
+    ...peek.people.map((p) => ({ id: p.id, name: p.name, avatar: p.avatar, lit: p.live })),
+  ]
+
+  return (
+    <>
       <div className="session-recover" role="status">
-        <p>You've been invited to study together. Sign in to join.</p>
+        <p>Press Enter to study with {peek.name}.</p>
+        {!signedIn && (
+          <p className="room-guest-note">
+            You're not signed in, so this session won't be saved to an account.{' '}
+            <button type="button" className="session-link" onClick={handleSignIn}>
+              Sign in
+            </button>
+          </p>
+        )}
         <div className="session-recover-actions">
-          <button type="button" className="session-stop" onClick={handleSignIn}>
-            Sign in with Google
-          </button>
           <button type="button" className="session-link" onClick={onDismiss}>
-            Study alone
+            Study alone instead
           </button>
         </div>
       </div>
-    )
-  }
-
-  if (preview === undefined || preview?.joined) return null
-
-  if (preview === null || preview.expired) {
-    return (
-      <p className="session-notice" role="status">
-        That study link has expired. Starting studies on your own.
-      </p>
-    )
-  }
-
-  const others = preview.members - 1
-  return (
-    <div className="session-recover" role="status">
-      <p>
-        Press Enter to study with {preview.hostName}
-        {others > 0 ? ` and ${others} ${others === 1 ? 'other' : 'others'}` : ''}. You'll
-        see when each other are studying and for how long, never what. Joining also
-        adds everyone in it as your friends.
-      </p>
-      <div className="session-recover-actions">
-        <button type="button" className="session-link" onClick={onDismiss}>
-          Study alone instead
-        </button>
-      </div>
-    </div>
+      <StudyTable people={people} />
+    </>
   )
 }

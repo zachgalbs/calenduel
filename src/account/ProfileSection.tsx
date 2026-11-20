@@ -1,6 +1,14 @@
-import { useEffect, useRef, useState, type ChangeEvent } from 'react'
+import { useEffect, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import Avatar from '../Avatar'
-import { ensureProfile, isSignedIn, setAvatar, type Profile } from '../compete/api'
+import {
+  ensureProfile,
+  isSignedIn,
+  personLink,
+  setAvatar,
+  setUsername,
+  type Profile,
+} from '../compete/api'
+import CopyLink from '../room/CopyLink'
 import { toAvatar } from './avatar'
 
 function errorText(err: unknown): string {
@@ -15,6 +23,10 @@ export default function ProfileSection() {
   const [profile, setProfile] = useState<Profile | null>(null)
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  // The username being typed; it only becomes yours on Save.
+  const [draft, setDraft] = useState('')
+  const [nameError, setNameError] = useState<string | null>(null)
+  const [renaming, setRenaming] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -25,7 +37,9 @@ export default function ProfileSection() {
       setSignedIn(active)
       if (!active) return
       const mine = await ensureProfile()
-      if (!closed) setProfile(mine)
+      if (closed) return
+      setProfile(mine)
+      setDraft(mine.name)
     }
     load().catch((err) => {
       if (!closed) setError(errorText(err))
@@ -46,6 +60,22 @@ export default function ProfileSection() {
       setError(errorText(err))
     } finally {
       setSaving(false)
+    }
+  }
+
+  async function handleRename(event: FormEvent) {
+    event.preventDefault()
+    if (!profile) return
+    setNameError(null)
+    setRenaming(true)
+    try {
+      const name = await setUsername(draft)
+      setProfile({ ...profile, name })
+      setDraft(name)
+    } catch (err) {
+      setNameError(errorText(err))
+    } finally {
+      setRenaming(false)
     }
   }
 
@@ -107,10 +137,39 @@ export default function ProfileSection() {
       )}
 
       {profile && (
-        <p className="account-note">
-          Your friends see your picture next to your name. Your name comes from
-          your Google account.
-        </p>
+        <form className="username" onSubmit={handleRename}>
+          <label className="username-label" htmlFor="username">
+            Username
+          </label>
+          <div className="username-row">
+            <input
+              id="username"
+              className="username-input"
+              value={draft}
+              maxLength={20}
+              autoComplete="off"
+              spellCheck={false}
+              onChange={(e) => setDraft(e.target.value.toLowerCase())}
+            />
+            <button
+              type="submit"
+              className="account-btn"
+              disabled={renaming || draft.trim() === profile.name}
+            >
+              {renaming ? 'Saving...' : 'Save'}
+            </button>
+          </div>
+          {nameError && <p className="account-error" role="alert">{nameError}</p>}
+          <p className="username-link">
+            <span>{personLink(profile.name).replace(/^https?:\/\//, '')}</span>
+            <CopyLink link={personLink(profile.name)} className="account-link" />
+          </p>
+          <p className="account-note">
+            Your link never expires: send it to anyone, and while you're studying
+            it brings them to your table, no sign-in needed. Changing your
+            username changes your link, and the old one stops working.
+          </p>
+        </form>
       )}
 
       {error && <p className="account-error" role="alert">{error}</p>}
