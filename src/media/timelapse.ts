@@ -14,8 +14,14 @@
 // Each frame is a composite: the shared screen fills the frame, with the webcam
 // face drawn small in the bottom-right (picture-in-picture), so a viewer can see
 // both what you were working on and that you were there.
+//
+// Encoded frames are held until Stop, and only then muxed into the MP4 along
+// with the background song (see soundtrack.ts). Muxing late means the song's
+// length can match the clip's exactly, and if the music fails for any reason
+// the clip still comes out — just silent.
 
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
+import { encodeSoundtrack, fetchSong, type EncodedSoundtrack } from './soundtrack'
 
 const SAMPLE_RATE = 1    // frames captured per second of real time
 const PLAYBACK_FPS = 30  // frames shown per second on playback → 30× speedup
@@ -124,11 +130,15 @@ export function startTimelapse(
   screen: HTMLVideoElement,
   getExtra: () => HTMLVideoElement | null = () => null,
 ): TimelapseRecorder {
-  // Encoder + muxer are built lazily on the first frame that actually has
-  // pixels: configure() needs real dimensions, and the feed reports 0×0 until
-  // it's playing. Both stay null until then.
-  let muxer: Muxer<ArrayBufferTarget> | null = null
+  // The encoder is built lazily on the first frame that actually has pixels:
+  // configure() needs real dimensions, and the feed reports 0×0 until it's
+  // playing. It stays null until then.
   let encoder: VideoEncoder | null = null
+  // What the muxer will need at Stop, plus every encoded frame so far.
+  let videoFormat: { codec: 'avc' | 'vp9'; width: number; height: number } | null = null
+  const videoChunks: { chunk: EncodedVideoChunk; meta?: EncodedVideoChunkMetadata }[] = []
+  // Fetched now so Stop doesn't wait on the network.
+  const song = fetchSong()
   let frameCount = 0
   let paused = false
   // Choosing a codec is async, so frames are skipped until it settles.
@@ -167,14 +177,10 @@ export function startTimelapse(
 
     scratch.width = width
     scratch.height = height
-    const mux = new Muxer({
-      target: new ArrayBufferTarget(),
-      video: { codec: chosen.muxer, width, height },
-      fastStart: 'in-memory', // moov box up front → the Blob is seekable/playable
-    })
+    videoFormat = { codec: chosen.muxer, width, height }
     const enc = new VideoEncoder({
-      // Forward meta untouched — it carries the codec description the muxer needs.
-      output: (chunk, meta) => mux.addVideoChunk(chunk, meta),
+      // Keep meta untouched — it carries the codec description the muxer needs.
+      output: (chunk, meta) => videoChunks.push({ chunk, meta }),
       error: (e) => {
         console.error('timelapse encode error', e)
         problem ??= `The video encoder stopped: ${e.message}`
@@ -182,7 +188,6 @@ export function startTimelapse(
       },
     })
     enc.configure({ codec: chosen.codec, width, height, bitrate: BITRATE })
-    muxer = mux
     encoder = enc
   }
 
@@ -317,7 +322,7 @@ export function startTimelapse(
       // Nothing usable: never sampled, or the codec died mid-session — you can't
       // flush a closed encoder, so report why rather than throw.
       if (problem) return { clip: null, problem, layout: [] }
-      if (!encoder || !muxer || encoder.state !== 'configured' || frameCount === 0) {
+      if (!encoder || !videoFormat || encoder.state !== 'configured' || frameCount === 0) {
         return {
           clip: null,
           layout: [],
@@ -332,7 +337,6 @@ export function startTimelapse(
           FLUSH_TIMEOUT_MS,
           'The video encoder never finished.',
         )
-        muxer.finalize()
       } catch (e) {
         console.error('timelapse finalize error', e)
         const detail = e instanceof Error ? ` ${e.message}` : ''
@@ -341,10 +345,29 @@ export function startTimelapse(
         // An error during flush may already have closed it.
         if ((encoder.state as CodecState) !== 'closed') encoder.close()
       }
-      return {
-        clip: new Blob([muxer.target.buffer], { type: 'video/mp4' }),
-        problem: null,
-        layout,
+      const music = await soundtrackFor(frameCount * FRAME_DURATION_US)
+      try {
+        const muxer = new Muxer({
+          target: new ArrayBufferTarget(),
+          video: videoFormat,
+          audio: music
+            ? { codec: music.codec, numberOfChannels: 2, sampleRate: 48_000 }
+            : undefined,
+          fastStart: 'in-memory', // moov box up front → the Blob is seekable/playable
+        })
+        for (const { chunk, meta } of videoChunks) muxer.addVideoChunk(chunk, meta)
+        for (const { chunk, meta } of music?.chunks ?? []) muxer.addAudioChunk(chunk, meta)
+        muxer.finalize()
+        videoChunks.length = 0
+        return {
+          clip: new Blob([muxer.target.buffer], { type: 'video/mp4' }),
+          problem: null,
+          layout,
+        }
+      } catch (e) {
+        console.error('timelapse finalize error', e)
+        const detail = e instanceof Error ? ` ${e.message}` : ''
+        return { clip: null, problem: `Couldn't finish the timelapse video.${detail}`, layout: [] }
       }
     },
     cancel() {
@@ -352,6 +375,24 @@ export function startTimelapse(
       // Tear down without finalizing. encoder may be null (no frame ever landed)
       // or already closed by a preceding stop()/error — guard both.
       if (encoder && encoder.state !== 'closed') encoder.close()
+      videoChunks.length = 0
     },
+  }
+
+  // The song, encoded to the clip's length. Null (a silent clip) if anything
+  // about the music fails or stalls — it must never cost the video.
+  async function soundtrackFor(durationUs: number): Promise<EncodedSoundtrack | null> {
+    try {
+      const bytes = await withTimeout(song, FLUSH_TIMEOUT_MS, 'The song never loaded.')
+      if (!bytes) return null
+      return await withTimeout(
+        encodeSoundtrack(bytes, durationUs),
+        FLUSH_TIMEOUT_MS,
+        'The song never finished encoding.',
+      )
+    } catch (e) {
+      console.error('soundtrack error', e)
+      return null
+    }
   }
 }
