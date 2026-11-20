@@ -114,11 +114,6 @@
   color: var(--text);
 }
 
-/* Your own line, ranked among your friends: the same, a little heavier. */
-.friend-row[data-self] .friend-name {
-  font-weight: 650;
-}
-
 .friend-row[data-live='true'] .friend-status {
   color: var(--live);
 }

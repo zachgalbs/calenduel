@@ -215,9 +215,7 @@ function HeatHead({ today, range }: { today: string; range: Range }) {
 type Status = { kind: 'studying' | 'break'; ms: number } | null
 
 // One friend, one line: who, their squares, the totals, and a way in.
-// Opening it shows the rest. `self` is your own line, among your friends so
-// you can see where you stand: no Join or Remove, and nothing friend-only
-// when opened.
+// Opening it shows the rest.
 function FriendRow({
   friend,
   summary,
@@ -227,7 +225,6 @@ function FriendRow({
   joinCode,
   onJoin,
   onRemoved,
-  self = false,
 }: {
   friend: Friend
   summary: WeekSummary
@@ -237,7 +234,6 @@ function FriendRow({
   joinCode: string | null
   onJoin: (code: string) => void
   onRemoved: () => void
-  self?: boolean
 }) {
   const [open, setOpen] = useState(false)
   // Removing takes a few seconds to happen, so it can be undone.
@@ -263,7 +259,7 @@ function FriendRow({
   }
 
   return (
-    <li className="friend-row" data-live={status !== null} data-self={self || undefined}>
+    <li className="friend-row" data-live={status !== null}>
       <details onToggle={(e) => setOpen(e.currentTarget.open)}>
         <summary className="friend-line reveal">
           <span className="friend-who">
@@ -282,7 +278,7 @@ function FriendRow({
           <span className="friend-num">{summary.streak > 0 ? `${summary.streak}d` : '–'}</span>
           {/* Join, or else Remove on hover: the slot is always there, so columns line up. */}
           <span className="friend-join">
-            {self ? null : joinCode ? (
+            {joinCode ? (
               <button
                 type="button"
                 className="compete-btn primary"
@@ -325,16 +321,13 @@ function FriendRow({
                 <dt>Focus</dt>
                 <dd>{percentText(summary.focusMs, summary.analyzedMs)}</dd>
               </div>
-              {!self && (
-                <div>
-                  <dt>Friends since</dt>
-                  <dd>{shortDay(friend.since)}</dd>
-                </div>
-              )}
+              <div>
+                <dt>Friends since</dt>
+                <dd>{shortDay(friend.since)}</dd>
+              </div>
             </dl>
 
-            {/* Your own sessions are on the Sessions page. */}
-            {!self && <FriendSessions friendId={friend.id} />}
+            <FriendSessions friendId={friend.id} />
           </div>
         )}
       </details>
@@ -506,25 +499,15 @@ export default function Compete({
         friend: f,
         summary: weekSummary(totals, f.id, board.today),
         status: statusOf(f.id),
-        self: false,
       }))
     : []
-  // You, ranked with your friends by the same rule, so you can compare.
-  const me = board
-    ? {
-        friend: { id: board.profile.id, name: 'You', avatar: board.profile.avatar, since: board.today },
-        summary: weekSummary(totals, board.profile.id, board.today),
-        status: statusOf(board.profile.id),
-        self: true,
-      }
-    : null
   // Who you can join first, then whoever has studied most in the range.
   // Anyone with nothing in it folds away into one line.
   const rangeMs = (r: (typeof rows)[number]) => (range === 7 ? r.summary.weekMs : r.summary.daysMs)
   const rank = (r: (typeof rows)[number]) =>
     r.status?.kind === 'studying' ? 2 : r.status?.kind === 'break' ? 1 : 0
-  // You always show, even with nothing in the range.
-  const active = [...rows.filter((r) => r.status !== null || rangeMs(r) > 0), ...(me ? [me] : [])]
+  const active = rows
+    .filter((r) => r.status !== null || rangeMs(r) > 0)
     .sort((a, b) => rank(b) - rank(a) || rangeMs(b) - rangeMs(a))
   const quiet = rows.filter((r) => r.status === null && rangeMs(r) === 0)
   const studyingNow = rows.filter((r) => r.status?.kind === 'studying').length
@@ -594,13 +577,12 @@ export default function Compete({
                       range={range}
                       today={board.today}
                       joinCode={
-                        !r.self && rooms.has(r.friend.id) && rooms.get(r.friend.id) !== room
+                        rooms.has(r.friend.id) && rooms.get(r.friend.id) !== room
                           ? rooms.get(r.friend.id)!
                           : null
                       }
                       onJoin={onJoin}
                       onRemoved={refresh}
-                      self={r.self}
                     />
                   ))}
                 </ul>
