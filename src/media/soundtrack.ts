@@ -1,6 +1,7 @@
 // Background music for the timelapse.
 //
-// Every clip gets one song from ./music, picked at random. The song is fetched
+// Every clip gets one song from ./music, shuffled so each plays once before
+// any repeats (see nextSong). The song is fetched
 // when recording starts (so Stop doesn't wait on the network) but only decoded
 // at Stop — a decoded 4-minute song is ~90 MB of samples, too much to hold
 // through a multi-hour session. At Stop it's cut to the clip's length (looped
@@ -8,9 +9,49 @@
 //
 // To add or remove a song, just add or remove a file in ./music.
 
-const SONGS = Object.values(
-  import.meta.glob('./music/*.{mp3,aac,m4a}', { query: '?url', import: 'default', eager: true }),
-) as string[]
+// File path -> URL. The path names the song; the URL changes with each build.
+const SONGS = import.meta.glob('./music/*.{mp3,aac,m4a}', {
+  query: '?url',
+  import: 'default',
+  eager: true,
+}) as Record<string, string>
+
+const QUEUE_KEY = 'calenduel.songQueue'
+const LAST_KEY = 'calenduel.lastSong'
+
+function shuffled<T>(items: T[]): T[] {
+  const out = [...items]
+  for (let i = out.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1))
+    ;[out[i], out[j]] = [out[j], out[i]]
+  }
+  return out
+}
+
+// The next song from a shuffled queue kept in localStorage: every song plays
+// once before any repeats, and a fresh round never opens with the song that
+// just ended the last. Songs added or removed from ./music are picked up.
+function nextSong(): string | null {
+  const all = Object.keys(SONGS)
+  if (all.length === 0) return null
+  try {
+    let queue = (JSON.parse(localStorage.getItem(QUEUE_KEY) ?? '[]') as string[]).filter((p) =>
+      all.includes(p),
+    )
+    if (queue.length === 0) {
+      const last = localStorage.getItem(LAST_KEY)
+      queue = shuffled(all)
+      if (queue.length > 1 && queue[0] === last) queue.push(queue.shift()!)
+    }
+    const song = queue.shift()!
+    localStorage.setItem(QUEUE_KEY, JSON.stringify(queue))
+    localStorage.setItem(LAST_KEY, song)
+    return song
+  } catch {
+    // Storage blocked: a plain random pick.
+    return all[Math.floor(Math.random() * all.length)]
+  }
+}
 
 // 48 kHz is the one rate both AAC and Opus encoders take.
 const SAMPLE_RATE = 48_000
@@ -32,11 +73,11 @@ export interface EncodedSoundtrack {
   chunks: { chunk: EncodedAudioChunk; meta?: EncodedAudioChunkMetadata }[]
 }
 
-// Starts fetching a random song. Resolves to its undecoded bytes, or null.
+// Starts fetching the next song. Resolves to its undecoded bytes, or null.
 export function fetchSong(): Promise<ArrayBuffer | null> {
-  if (SONGS.length === 0) return Promise.resolve(null)
-  const url = SONGS[Math.floor(Math.random() * SONGS.length)]
-  return fetch(url)
+  const song = nextSong()
+  if (!song) return Promise.resolve(null)
+  return fetch(SONGS[song])
     .then((r) => (r.ok ? r.arrayBuffer() : null))
     .catch(() => null)
 }
