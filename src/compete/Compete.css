@@ -121,9 +121,47 @@
 /* ── Four weeks of squares ── */
 
 .friend-pulse {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.5rem 1rem;
   font-size: 13px;
   color: var(--text);
   margin-bottom: 1.25rem;
+}
+
+.heat-range {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+
+.heat-range button {
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: var(--text);
+  background: none;
+  border: 0;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+
+.heat-range button:hover {
+  color: var(--text-h);
+}
+
+.heat-range button[aria-pressed='true'] {
+  color: var(--text-h);
+  background: var(--code-bg);
+}
+
+.heat-range button:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
 }
 
 .friend-pulse-live {
@@ -151,6 +189,25 @@
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 5px;
+}
+
+/* One week: a single row of bigger squares. */
+.heat[data-weeks='1'] {
+  grid-template-columns: minmax(0, 1fr);
+}
+
+.heat[data-weeks='1'] .heat-week {
+  gap: 4px;
+}
+
+.heat[data-weeks='1'] .heat-day,
+.heat-label {
+  max-width: 22px;
+  border-radius: 3px;
+}
+
+.heat-label {
+  text-align: center;
 }
 
 .heat-week {

@@ -141,12 +141,23 @@ function heatLevel(ms: number): number {
   return ms <= 0 ? 0 : min < 45 ? 1 : min < 90 ? 2 : min < 180 ? 3 : 4
 }
 
-// Four weeks of squares, a column of seven per week, today last.
+// How far back the squares reach: a week by default, or four.
+type Range = 7 | 28
+
+const rangeText = (range: Range) => (range === 7 ? 'this week' : 'in 4 weeks')
+
+// A column of seven squares per week, today last.
 function Heatmap({ days, today, live }: { days: number[]; today: string; live: boolean }) {
   const total = days.reduce((a, b) => a + b, 0)
-  const weeks = [0, 7, 14, 21].map((from) => days.slice(from, from + 7))
+  const weeks: number[][] = []
+  for (let from = 0; from < days.length; from += 7) weeks.push(days.slice(from, from + 7))
   return (
-    <span className="heat" role="img" aria-label={`${formatStudyTime(total)} in 4 weeks`}>
+    <span
+      className="heat"
+      data-weeks={weeks.length}
+      role="img"
+      aria-label={`${formatStudyTime(total)} ${rangeText(days.length as Range)}`}
+    >
       {weeks.map((week, w) => (
         <span key={w} className="heat-week">
           {week.map((ms, i) => {
@@ -170,22 +181,31 @@ function Heatmap({ days, today, live }: { days: number[]; today: string; live: b
   )
 }
 
-// The dates the four heatmap columns start on.
-function HeatHead({ today }: { today: string }) {
+// Above the squares: each day's initial for one week, each week's start for four.
+function HeatHead({ today, range }: { today: string; range: Range }) {
+  const label = (back: number, opts: Intl.DateTimeFormatOptions) =>
+    new Date(`${addDays(today, -back)}T12:00:00`).toLocaleDateString([], opts)
   return (
     <div className="friend-head" aria-hidden="true">
       <span />
-      <span className="heat">
-        {[27, 20, 13, 6].map((back) => (
-          <span key={back}>
-            {new Date(`${addDays(today, -back)}T12:00:00`).toLocaleDateString([], {
-              month: 'short',
-              day: 'numeric',
-            })}
+      {range === 7 ? (
+        <span className="heat" data-weeks={1}>
+          <span className="heat-week">
+            {[6, 5, 4, 3, 2, 1, 0].map((back) => (
+              <span key={back} className="heat-label">
+                {label(back, { weekday: 'narrow' })}
+              </span>
+            ))}
           </span>
-        ))}
-      </span>
-      <span>4 wks</span>
+        </span>
+      ) : (
+        <span className="heat" data-weeks={4}>
+          {[27, 20, 13, 6].map((back) => (
+            <span key={back}>{label(back, { month: 'short', day: 'numeric' })}</span>
+          ))}
+        </span>
+      )}
+      <span>{range === 7 ? 'Week' : '4 wks'}</span>
       <span>Streak</span>
       <span />
     </div>
@@ -194,12 +214,13 @@ function HeatHead({ today }: { today: string }) {
 
 type Status = { kind: 'studying' | 'break'; ms: number } | null
 
-// One friend, one line: who, four weeks of squares, the totals, and a way in.
+// One friend, one line: who, their squares, the totals, and a way in.
 // Opening it shows the rest.
 function FriendRow({
   friend,
   summary,
   status,
+  range,
   today,
   joinCode,
   onJoin,
@@ -208,6 +229,7 @@ function FriendRow({
   friend: Friend
   summary: WeekSummary
   status: Status
+  range: Range
   today: string
   joinCode: string | null
   onJoin: (code: string) => void
@@ -220,6 +242,7 @@ function FriendRow({
     onRemoved()
   })
 
+  const totalMs = range === 7 ? summary.weekMs : summary.daysMs
   // Only what's happening now; the squares say the rest.
   const line =
     status?.kind === 'studying' ? formatStudyTime(status.ms) : status?.kind === 'break' ? 'Break' : null
@@ -246,8 +269,12 @@ function FriendRow({
             </span>
             {line && <span className="friend-status">{line}</span>}
           </span>
-          <Heatmap days={summary.days} today={today} live={status?.kind === 'studying'} />
-          <span className="friend-num">{summary.daysMs > 0 ? formatStudyTime(summary.daysMs) : '–'}</span>
+          <Heatmap
+            days={range === 7 ? summary.week : summary.days}
+            today={today}
+            live={status?.kind === 'studying'}
+          />
+          <span className="friend-num">{totalMs > 0 ? formatStudyTime(totalMs) : '–'}</span>
           <span className="friend-num">{summary.streak > 0 ? `${summary.streak}d` : '–'}</span>
           {/* Join, or else Remove on hover: the slot is always there, so columns line up. */}
           <span className="friend-join">
@@ -324,6 +351,7 @@ export default function Compete({
   // Sessions running right now, and the clock their time is counted to.
   const [live, setLive] = useState<LiveSession[]>([])
   const [now, setNow] = useState(() => Date.now())
+  const [range, setRange] = useState<Range>(7)
   const liveIdsRef = useRef<Set<string>>(new Set())
 
   // A failed read keeps the last answer: live time is a nicety, and the
@@ -473,14 +501,15 @@ export default function Compete({
         status: statusOf(f.id),
       }))
     : []
-  // Who you can join first, then whoever has studied most in four weeks.
-  // Anyone with nothing in all four folds away into one line.
+  // Who you can join first, then whoever has studied most in the range.
+  // Anyone with nothing in it folds away into one line.
+  const rangeMs = (r: (typeof rows)[number]) => (range === 7 ? r.summary.weekMs : r.summary.daysMs)
   const rank = (r: (typeof rows)[number]) =>
     r.status?.kind === 'studying' ? 2 : r.status?.kind === 'break' ? 1 : 0
   const active = rows
-    .filter((r) => r.status !== null || r.summary.daysMs > 0)
-    .sort((a, b) => rank(b) - rank(a) || b.summary.daysMs - a.summary.daysMs)
-  const quiet = rows.filter((r) => r.status === null && r.summary.daysMs === 0)
+    .filter((r) => r.status !== null || rangeMs(r) > 0)
+    .sort((a, b) => rank(b) - rank(a) || rangeMs(b) - rangeMs(a))
+  const quiet = rows.filter((r) => r.status === null && rangeMs(r) === 0)
   const studyingNow = rows.filter((r) => r.status?.kind === 'studying').length
   const studiedToday = rows.filter((r) => r.status?.kind === 'studying' || r.summary.todayMs > 0).length
 
@@ -519,15 +548,24 @@ export default function Compete({
 
           {board.friends.length > 0 && (
             <section className="compete-section">
-              <p className="friend-pulse">
-                {studyingNow > 0 && (
-                  <span className="friend-pulse-live">
-                    <LiveDot on /> {studyingNow} studying ·{' '}
-                  </span>
-                )}
-                {studiedToday} of {board.friends.length} today
-              </p>
-              {active.length > 0 && <HeatHead today={board.today} />}
+              <div className="friend-pulse">
+                <p>
+                  {studyingNow > 0 && (
+                    <span className="friend-pulse-live">
+                      <LiveDot on /> {studyingNow} studying ·{' '}
+                    </span>
+                  )}
+                  {studiedToday} of {board.friends.length} today
+                </p>
+                <span className="heat-range" role="group" aria-label="Range">
+                  {([7, 28] as const).map((r) => (
+                    <button key={r} type="button" aria-pressed={range === r} onClick={() => setRange(r)}>
+                      {r === 7 ? '1 wk' : '4 wks'}
+                    </button>
+                  ))}
+                </span>
+              </div>
+              {active.length > 0 && <HeatHead today={board.today} range={range} />}
               {active.length > 0 ? (
                 <ul className="friend-rows">
                   {active.map((r) => (
@@ -536,6 +574,7 @@ export default function Compete({
                       friend={r.friend}
                       summary={r.summary}
                       status={r.status}
+                      range={range}
                       today={board.today}
                       joinCode={
                         rooms.has(r.friend.id) && rooms.get(r.friend.id) !== room
@@ -548,12 +587,14 @@ export default function Compete({
                   ))}
                 </ul>
               ) : (
-                <p className="compete-note">Nobody's studied in 4 weeks.</p>
+                <p className="compete-note">Nobody's studied {rangeText(range)}.</p>
               )}
 
               {quiet.length > 0 && (
                 <details className="friend-quiet">
-                  <summary>{plural(quiet.length, 'friend')} quiet for 4 weeks</summary>
+                  <summary>
+                    {plural(quiet.length, 'friend')} quiet {rangeText(range).replace('in ', 'for ')}
+                  </summary>
                   <ul className="friend-rows">
                     {quiet.map((r) => (
                       <FriendRow
@@ -561,7 +602,8 @@ export default function Compete({
                         friend={r.friend}
                         summary={r.summary}
                         status={null}
-                          today={board.today}
+                          range={range}
+                      today={board.today}
                         joinCode={null}
                         onJoin={onJoin}
                         onRemoved={refresh}
