@@ -155,7 +155,7 @@ code {
 
 /* ── Quiet controls ───────────────────────────────────────────────
    Secondary actions stay out of sight until you reach for the thing
-   they act on: hover or keyboard focus within a .reveal shows them.
+   they act on: hover, or keyboard focus in a .reveal, shows them.
    Touch screens can't hover, so there they're always faintly shown. */
 
 .icon-btn {
@@ -183,8 +183,10 @@ code {
   transition: opacity 0.15s ease;
 }
 
+/* Keyboard focus only: a click focuses the row too, and mustn't pin it. */
 .reveal:hover .reveal-item,
-.reveal:focus-within .reveal-item {
+.reveal:has(:focus-visible) .reveal-item,
+.reveal:focus-visible .reveal-item {
   opacity: 1;
 }
 
