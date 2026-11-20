@@ -31,10 +31,15 @@ export default function Stopwatch({
   startedAt,
   stoppedAt,
   pause = NOT_PAUSED,
+  resumedAt = null,
 }: {
   startedAt: number | null
   stoppedAt: number | null
   pause?: PauseState
+  // When studying last (re)started. `now` only ticks while running, so just
+  // after a resume it still holds a time from before the break, which, with
+  // the whole break now taken out, would read as too little. Never earlier.
+  resumedAt?: number | null
 }) {
   const paused = pause.pausedAt !== null
   const running = startedAt !== null && stoppedAt === null && !paused
@@ -49,7 +54,7 @@ export default function Stopwatch({
   }, [running])
 
   // While paused, read at the pause itself: `now` stops updating then.
-  const at = stoppedAt ?? (paused ? pause.pausedAt! : now)
+  const at = stoppedAt ?? (paused ? pause.pausedAt! : Math.max(now, resumedAt ?? 0))
   const elapsed = startedAt === null ? 0 : studiedMs(startedAt, at, pause)
   const chars = [...formatClock(elapsed)]
 

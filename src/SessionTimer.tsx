@@ -571,7 +571,7 @@ export default function SessionTimer({
             </button>
           )}
         </div>
-        <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} pause={pause} />
+        <Stopwatch startedAt={startedAt} stoppedAt={stoppedAt} pause={pause} resumedAt={stretchFrom} />
       </div>
 
       <div className="session-actions" data-still={still}>
