@@ -78,7 +78,7 @@ export default function RoomInvite({ username }: { username: string }) {
     <>
       {!signedIn && (
         <p className="room-guest-note" role="status">
-          This session won't be saved.{' '}
+          Saved on this device only.{' '}
           <button type="button" className="session-link" onClick={handleSignIn}>
             Sign in
           </button>
