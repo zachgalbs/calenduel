@@ -69,6 +69,11 @@ function describe(e: unknown): string {
   return String(e)
 }
 
+type Api = typeof import('./compete/api')
+
+// How often a session started from someone's link looks for them.
+const LINK_CHECK_MS = 5_000
+
 export default function SessionTimer({
   withUser = null,
   onDismissWith,
@@ -289,13 +294,7 @@ export default function SessionTimer({
 
       if (target) {
         try {
-          if (me) {
-            await api.joinRoom(target) // idempotent; also friends you with everyone in it
-            setSeat({ room: target, selfId: me, guest: false })
-          } else {
-            const id = await api.guestJoin(target, guestSecret())
-            setSeat({ room: target, selfId: id, guest: true })
-          }
+          await sitAt(api, target, me)
           return
         } catch (err) {
           console.error('joining the study room failed', err)
@@ -308,6 +307,50 @@ export default function SessionTimer({
       setSeat({ room: await api.createRoom(), selfId: me, guest: false })
     })().catch((err) => console.error('study room failed', err))
   }
+
+  // Joins a room and takes a seat at its table: signed in (me = your id),
+  // or as a guest.
+  async function sitAt(api: Api, target: string, me: string | null) {
+    if (me) {
+      await api.joinRoom(target) // idempotent; also friends you with everyone in it
+      setSeat({ room: target, selfId: me, guest: false })
+    } else {
+      const id = await api.guestJoin(target, guestSecret())
+      setSeat({ room: target, selfId: id, guest: true })
+    }
+  }
+
+  // Studying from someone's link before they've started: keep an eye out,
+  // and move to their table once they're at it. Unless someone's already
+  // sitting with you: then you stay put.
+  const seatRef = useRef(seat)
+  useEffect(() => {
+    seatRef.current = seat
+  })
+  useEffect(() => {
+    if (status !== 'running' || !withUser) return
+    let closed = false
+    const check = async () => {
+      const api = await import('./compete/api')
+      const signedIn = await api.isSignedIn()
+      const person = await api.personPeek(withUser, signedIn ? null : guestSecret())
+      const current = seatRef.current
+      if (closed || !person || person.isMe || !person.room || person.room === current?.room) return
+      if (current) {
+        const people = await api.roomPeek(current.room)
+        if (closed || people?.some((p) => p.id !== current.selfId)) return
+        await (current.guest ? api.guestLeave(current.room, guestSecret()) : api.leaveRoom(current.room))
+      }
+      await sitAt(api, person.room, signedIn ? (await api.ensureProfile()).id : null)
+    }
+    const timer = setInterval(() => {
+      check().catch((err) => console.error('following the study link failed', err))
+    }, LINK_CHECK_MS)
+    return () => {
+      closed = true
+      clearInterval(timer)
+    }
+  }, [status, withUser])
 
   // Stopping leaves the table: the others see you go, not a dark lamp (a
   // break keeps you seated), and the last one out disbands the room.
