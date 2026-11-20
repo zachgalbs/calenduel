@@ -76,7 +76,6 @@ const LINK_CHECK_MS = 5_000
 
 export default function SessionTimer({
   withUser = null,
-  onDismissWith,
   joinCode = null,
   onJoined,
   onRoomChange,
@@ -87,7 +86,6 @@ export default function SessionTimer({
 }: {
   // Whose ?with= link brought us here: Enter studies at their table.
   withUser?: string | null
-  onDismissWith: () => void
   // A friend's room from a Join click on Friends: the next start joins it.
   joinCode?: string | null
   onJoined?: () => void
@@ -659,7 +657,7 @@ export default function SessionTimer({
         ))}
 
       {status === 'idle' && withUser && (
-        <RoomInvite username={withUser} onDismiss={onDismissWith} />
+        <RoomInvite username={withUser} />
       )}
     </section>
   )

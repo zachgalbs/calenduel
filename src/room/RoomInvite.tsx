@@ -7,7 +7,7 @@ import { usePersonPeek } from './useRoom'
 // they're studying: their table as it is, with your empty seat at it, and
 // that Enter joins them. No sign-in needed: signed out, you join as a guest.
 // Says nothing for your own link, or a table you're already at (a refresh).
-export default function RoomInvite({ username, onDismiss }: { username: string; onDismiss: () => void }) {
+export default function RoomInvite({ username }: { username: string }) {
   const peek = usePersonPeek(username)
   const me = useMe()
   const [signedIn, setSignedIn] = useState<boolean | null>(null)
@@ -69,11 +69,6 @@ export default function RoomInvite({ username, onDismiss }: { username: string; 
             </button>
           </p>
         )}
-        <div className="session-recover-actions">
-          <button type="button" className="session-link" onClick={onDismiss}>
-            Study alone
-          </button>
-        </div>
       </div>
       <StudyTable people={people} />
     </>

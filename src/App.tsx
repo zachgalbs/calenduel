@@ -80,8 +80,8 @@ function App() {
   }, [sessionActive])
   const [historyKey, setHistoryKey] = useState(0)
   // Whose ?with= link brought us here (see room/useRoom.ts). Stays in the
-  // URL until dismissed, so a refresh still offers their table.
-  const [withUser, setWithUser] = useState<string | null>(withFromUrl)
+  // URL, so a refresh still offers their table.
+  const [withUser] = useState<string | null>(withFromUrl)
   // The study room this tab's session sits in, as SessionTimer reports it:
   // Friends leaves out the Join button for it.
   const [room, setRoom] = useState<string | null>(null)
@@ -149,7 +149,6 @@ function App() {
       {page === 'timer' && (
         <SessionTimer
           withUser={withUser}
-          onDismissWith={() => setWithUser(null)}
           joinCode={joinCode}
           onJoined={() => setJoinCode(null)}
           onRoomChange={setRoom}
