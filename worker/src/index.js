@@ -161,7 +161,10 @@ export default {
       const { payload } = await jwtVerify(token, keys.get(env.JWKS_URL), {
         issuer: env.AUTH_ISSUER, audience: env.AUTH_ISSUER, algorithms: ['EdDSA'],
       })
-      if (!payload.sub || payload.anonymous === true || payload.isAnonymous === true) throw new Error('No user')
+      // Neon Auth hands a signed token to signed-out visitors too (role and sub
+      // both "anonymous"). It must never reach inference: anyone can fetch one.
+      if (!payload.sub || payload.sub === 'anonymous' || payload.role === 'anonymous' ||
+          payload.anonymous === true || payload.isAnonymous === true) throw new Error('No user')
       subject = payload.sub
     } catch {
       return reply({ error: route.messages.signInAgain }, 401)

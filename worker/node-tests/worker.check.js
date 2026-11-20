@@ -44,6 +44,46 @@ test('preflight permits each origin in the list, and nothing else', async () => 
   assert.equal(other.headers.get('Access-Control-Allow-Origin'), null)
 })
 
+// Neon Auth signs a token for signed-out visitors as well: same key, same
+// audience, role and sub "anonymous". Anyone on the internet can fetch one.
+test('a signed anonymous token never invokes inference', async () => {
+  const { publicKey, privateKey } = await generateKeyPair('EdDSA')
+  const jwk = { ...await exportJWK(publicKey), kid: 'test', alg: 'EdDSA' }
+  const server = createServer((_, res) => {
+    res.setHeader('Content-Type', 'application/json')
+    res.end(JSON.stringify({ keys: [jwk] }))
+  })
+  await new Promise(resolve => server.listen(0, '127.0.0.1', resolve))
+  try {
+    const issuer = 'https://auth.example'
+    const sign = (claims, subject) => new SignJWT(claims).setProtectedHeader({ alg: 'EdDSA', kid: 'test' })
+      .setSubject(subject).setIssuer(issuer).setAudience(issuer).setExpirationTime('5m').sign(privateKey)
+    let inferenceCalls = 0
+    const env = {
+      ALLOWED_ORIGIN: 'https://calenduel.com', AUTH_ISSUER: issuer,
+      JWKS_URL: `http://127.0.0.1:${server.address().port}/jwks-anonymous`,
+      LIMITER: { async limit() { return { success: true } } },
+      AI: { async run() { inferenceCalls++ } },
+    }
+    const body = JSON.stringify({ task: 'chem homework', image: 'data:image/jpeg;base64,/9j/2Q==' })
+    for (const token of [
+      await sign({ role: 'anonymous' }, 'anonymous'),
+      await sign({ role: 'anonymous' }, 'some-id'),
+      await sign({ role: 'authenticated' }, 'anonymous'),
+    ]) {
+      for (const path of ['/score', '/compare', '/subjects']) {
+        const response = await worker.fetch(new Request(`https://worker${path}`, {
+          method: 'POST', headers: { Origin: 'https://calenduel.com', Authorization: `Bearer ${token}` }, body,
+        }), env)
+        assert.equal(response.status, 401)
+      }
+    }
+    assert.equal(inferenceCalls, 0)
+  } finally {
+    await new Promise(resolve => server.close(resolve))
+  }
+})
+
 test('valid signed requests are bounded, rate limited, and return only decisions', async () => {
   const { publicKey, privateKey } = await generateKeyPair('EdDSA')
   const jwk = { ...await exportJWK(publicKey), kid: 'test', alg: 'EdDSA' }
