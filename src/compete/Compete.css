@@ -263,6 +263,14 @@
   justify-content: flex-end;
 }
 
+/* Join sits in a row, so it takes the row's size, not the page-level primary
+   size: the big one is wider than its column and spilled onto the streak. */
+.friend-join .compete-btn.primary {
+  font-size: 12px;
+  line-height: 1.4;
+  padding: 3px 10px;
+}
+
 /* Opened: the rest, quietly. */
 .friend-more {
   padding: 0.25rem 0.25rem 1rem;
