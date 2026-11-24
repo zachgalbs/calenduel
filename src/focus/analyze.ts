@@ -53,7 +53,7 @@ export type FocusPhase = 'score' | 'recheck'
 async function focusClient(signal: AbortSignal) {
   const { focusToken } = await import('../compete/api')
   let token = await focusToken()
-  if (!token) throw new Error('Sign in on the Friends tab before analyzing a session.')
+  if (!token) throw new Error('Sign in on the Stats tab before analyzing a session.')
   let tokenCheckedAt = Date.now()
   return async function post(path: string, body: string): Promise<unknown> {
     if (Date.now() - tokenCheckedAt > 60_000) {

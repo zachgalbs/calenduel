@@ -333,7 +333,7 @@ function FriendRow({
               )}
             </dl>
 
-            {/* Your own sessions are on the Sessions page. */}
+            {/* Your own sessions are further down the page. */}
             {!self && <FriendSessions friendId={friend.id} />}
           </div>
         )}
@@ -531,9 +531,9 @@ export default function Compete({
   const studiedToday = rows.filter((r) => r.status?.kind === 'studying' || r.summary.todayMs > 0).length
 
   return (
-    <main className="compete">
+    <section className="compete">
       <header className="compete-head">
-        <h1>Friends</h1>
+        <h2>Friends</h2>
         {board && <CopyLink link={personLink(board.profile.name)} />}
       </header>
 
@@ -634,6 +634,6 @@ export default function Compete({
           )}
         </>
       )}
-    </main>
+    </section>
   )
 }

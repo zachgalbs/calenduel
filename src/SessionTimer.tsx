@@ -130,7 +130,7 @@ export default function SessionTimer({
   const [error, setError] = useState<string | null>(null)
   // Optional, and never required to start: Enter starts with or without it. It can be
   // typed before or during the session, and is fixed once Stop is pressed
-  // (after that, rename it on the Sessions page).
+  // (after that, rename it under Sessions on the Stats page).
   const [name, setName] = useState('')
   const task = name.trim() || DEFAULT_SESSION_NAME
   // A session cut off by a refresh or a closed tab, read once on load.

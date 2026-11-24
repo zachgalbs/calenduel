@@ -336,12 +336,16 @@ function SessionRow({ session, subjects, onChanged, subject }: {
   )
 }
 
-export default function History() {
+// Your sessions, on the Stats page. onSessions hears every fresh read, so the
+// numbers above stay in step with renames, deletions and subjects.
+export default function History({ onSessions }: { onSessions?: (s: SessionMeta[]) => void }) {
   const [sessions, setSessions] = useState<SessionMeta[] | null>(null)
 
   const refresh = useCallback(async () => {
-    setSessions(await listSessions())
-  }, [])
+    const list = await listSessions()
+    setSessions(list)
+    onSessions?.(list)
+  }, [onSessions])
 
   // refresh() only setStates after its await, so this is an async data fetch,
   // not a synchronous cascading render — same pattern as App's auto-load.
@@ -380,8 +384,8 @@ export default function History() {
   const book = openable.find((b) => b.key === openKey) ?? null
 
   return (
-    <main className="history">
-      <h1>Sessions</h1>
+    <section className="history">
+      <h2>Sessions</h2>
 
       {sessions !== null && sessions.length === 0 && (
         <p className="history-hint">No sessions yet.</p>
@@ -417,6 +421,6 @@ export default function History() {
       )}
       <SubjectOptions subjects={subjects} />
       <BringOver onMoved={refresh} />
-    </main>
+    </section>
   )
 }

@@ -1,20 +1,19 @@
-import { lazy, Suspense, useEffect, useState } from 'react'
+import { useEffect, useState } from 'react'
 import SessionTimer from './SessionTimer'
-import History from './History'
+import Stats from './Stats'
 import Account from './account/Account'
-import PageBoundary from './PageBoundary'
 import { withFromUrl } from './room/useRoom'
 import './App.css'
 
-// The auth and database SDK is big and only the friends features use it, so
-// it loads on demand rather than slowing down the timer.
-const Compete = lazy(() => import('./compete/Compete'))
-
-const PAGES = ['timer', 'history', 'friends', 'account'] as const
+const PAGES = ['timer', 'stats', 'account'] as const
 type Page = (typeof PAGES)[number]
 
-// The tabs, in nav order: what 1, 2, 3 open.
-const TAB_ORDER: Page[] = ['timer', 'history', 'friends']
+// The tabs, in nav order: what 1, 2 open.
+const TAB_ORDER: Page[] = ['timer', 'stats']
+
+// Sessions and Friends were their own tabs (and Friends was once compete);
+// they're one Stats page now, and old links land there.
+const OLD_TABS = ['history', 'friends', 'compete']
 
 function isPage(value: string | null): value is Page {
   return (PAGES as readonly (string | null)[]).includes(value)
@@ -22,15 +21,14 @@ function isPage(value: string | null): value is Page {
 
 // The open page is kept in the URL (?tab=...), so a refresh lands back on it.
 // ?with= links land on the timer, ready to study together (old ?invite= links, from
-// before friends came only from studying together, land on Friends); the
+// before friends came only from studying together, land on Stats); the
 // return trip from Google sign-in keeps the tab it left from.
-// ?tab=compete is the page's old name, still in older links and bookmarks.
 function initialPage(): Page {
   const params = new URLSearchParams(window.location.search)
   if (withFromUrl()) return 'timer'
-  if (params.has('invite')) return 'friends'
+  if (params.has('invite')) return 'stats'
   const tab = params.get('tab')
-  if (tab === 'compete') return 'friends'
+  if (tab && OLD_TABS.includes(tab)) return 'stats'
   return isPage(tab) ? tab : 'timer'
 }
 
@@ -60,13 +58,13 @@ function App() {
   // via onActiveChange.
   const [sessionActive, setSessionActive] = useState(false)
   const [page, setPage] = useState<Page>(initialPage)
-  // 1, 2, 3 open Timer, Sessions, Friends whenever the nav is showing: on
+  // 1, 2 open Timer, Stats whenever the nav is showing: on
   // their own outside a text field, or with Option anywhere, mid-typing too.
   // (Mac browsers keep every Cmd combination for their own tabs.)
   useEffect(() => {
     if (sessionActive) return
     const onKey = (e: KeyboardEvent) => {
-      const tab = TAB_ORDER[['Digit1', 'Digit2', 'Digit3'].indexOf(e.code)]
+      const tab = TAB_ORDER[['Digit1', 'Digit2'].indexOf(e.code)]
       if (!tab || e.metaKey || e.ctrlKey || e.repeat) return
       const t = e.target as HTMLElement | null
       const typing =
@@ -83,9 +81,9 @@ function App() {
   // URL, so a refresh still offers their table.
   const [withUser] = useState<string | null>(withFromUrl)
   // The study room this tab's session sits in, as SessionTimer reports it:
-  // Friends leaves out the Join button for it.
+  // Stats leaves out the Join button for it.
   const [room, setRoom] = useState<string | null>(null)
-  // A friend's room from a Join click on Friends, and that the timer starts
+  // A friend's room from a Join click on Stats, and that the timer starts
   // on arrival, while that click still counts as the gesture the screen
   // picker needs.
   const [joinCode, setJoinCode] = useState<string | null>(null)
@@ -118,19 +116,11 @@ function App() {
           </button>
           <button
             type="button"
-            className={page === 'history' ? 'nav-link active' : 'nav-link'}
-            title="Sessions (2)"
-            onClick={() => setPage('history')}
+            className={page === 'stats' ? 'nav-link active' : 'nav-link'}
+            title="Stats (2)"
+            onClick={() => setPage('stats')}
           >
-            Sessions
-          </button>
-          <button
-            type="button"
-            className={page === 'friends' ? 'nav-link active' : 'nav-link'}
-            title="Friends (3)"
-            onClick={() => setPage('friends')}
-          >
-            Friends
+            Stats
           </button>
           {/* Settings-type page, so it sits apart from the tabs as an icon. */}
           <button
@@ -157,7 +147,7 @@ function App() {
           onActiveChange={setSessionActive}
           onSessionSaved={() => {
             setHistoryKey((k) => k + 1)
-            // Best effort: the session is safe locally, and opening Friends
+            // Best effort: the session is safe locally, and opening Stats
             // retries anything that didn't make it up. Returned, so the timer
             // knows when its live time can make way for the uploaded one.
             return import('./compete/api')
@@ -167,21 +157,16 @@ function App() {
         />
       )}
 
-      {page === 'history' && <History key={historyKey} />}
-
-      {page === 'friends' && (
-        <PageBoundary>
-          <Suspense fallback={null}>
-            <Compete
-              room={room}
-              onJoin={(code) => {
-                setJoinCode(code)
-                setAutoStart(true)
-                setPage('timer')
-              }}
-            />
-          </Suspense>
-        </PageBoundary>
+      {page === 'stats' && (
+        <Stats
+          key={historyKey}
+          room={room}
+          onJoin={(code) => {
+            setJoinCode(code)
+            setAutoStart(true)
+            setPage('timer')
+          }}
+        />
       )}
 
       {page === 'account' && <Account />}

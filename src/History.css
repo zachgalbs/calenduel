@@ -4,13 +4,10 @@
 
 .history {
   width: 100%;
-  max-width: 34rem;
-  margin: 0 auto;
-  padding: clamp(4.5rem, 13vh, 9rem) 1.5rem 6rem;
 }
 
-.history h1 {
-  margin: 0 0 3rem;
+.history > h2 {
+  margin: 0 0 2rem;
 }
 
 .history-hint {

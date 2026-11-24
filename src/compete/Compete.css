@@ -1,12 +1,9 @@
 /* ─────────────────────────────────────────────────────────────────
-   Friends page — same editorial column as the Sessions page.
+   Friends, on the Stats page.
    ───────────────────────────────────────────────────────────────── */
 
 .compete {
   width: 100%;
-  max-width: 44rem; /* wider than Sessions, for four weeks of squares */
-  margin: 0 auto;
-  padding: clamp(4.5rem, 13vh, 9rem) 1.5rem 6rem;
 }
 
 
@@ -45,7 +42,7 @@
   margin: 0 0 2.5rem;
 }
 
-.compete-head h1 {
+.compete-head h2 {
   margin: 0;
 }
 
