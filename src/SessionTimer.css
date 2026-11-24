@@ -198,10 +198,11 @@
 }
 
 /* Big: the iPad fills the screen (less a margin) at its own shape, under the
-   camera tile and Stop. For screenshots, so as many pixels as fit. */
+   camera tile, with a strip left along the bottom for Stop. For screenshots,
+   so as many pixels as fit. */
 .session-ipad-wrap[data-big='true'] {
   position: fixed;
-  inset: 1rem;
+  inset: 1rem 1rem 4.25rem;
   z-index: 1;
   display: flex;
   align-items: center;
@@ -227,7 +228,10 @@
 }
 
 .session:has(.session-ipad-wrap[data-big='true']) .session-actions {
-  position: relative;
+  position: fixed;
+  left: 50%;
+  bottom: 1rem;
+  transform: translateX(-50%);
   z-index: 2;
 }
 
