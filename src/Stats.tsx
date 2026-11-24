@@ -28,15 +28,33 @@ function localTotals(sessions: SessionMeta[]): DailyTotal[] {
   return [...byDay.values()]
 }
 
+function dayLabel(day: string, opts: Intl.DateTimeFormatOptions): string {
+  return new Date(`${day}T12:00:00`).toLocaleDateString([], opts)
+}
+
 function You({ sessions, today }: { sessions: SessionMeta[]; today: string }) {
-  const sum = weekSummary(localTotals(sessions), 'me', today)
+  const totals = localTotals(sessions)
+  const sum = weekSummary(totals, 'me', today)
   const focus = focusPercent(sum.focusMs, sum.analyzedMs)
-  const top = Math.max(1, ...sum.week)
+  // How many weeks back the bars are, and the day pointed at (hover, focus or
+  // a tap), whose time takes the big number's place.
+  const [weeksBack, setWeeksBack] = useState(0)
+  const [picked, setPicked] = useState<string | null>(null)
+  const end = addDays(today, -7 * weeksBack)
+  const week = weekSummary(totals, 'me', end).week
+  const top = Math.max(1, ...week)
+  const byDay = new Map(totals.map((t) => [t.day, t.totalMs]))
+  // Back as far as your first session, never past today.
+  const first = totals.reduce<string | null>((min, t) => (min === null || t.day < min ? t.day : min), null)
+  const canGoBack = first !== null && addDays(end, -7) >= first
+  const shown = picked ?? today
   return (
     <section className="you" aria-label="You">
-      <div className="you-today">
-        <span className="you-big">{formatStudyTime(sum.todayMs)}</span>
-        <span className="you-label">today</span>
+      <div className="you-today" aria-live="polite">
+        <span className="you-big">{formatStudyTime(byDay.get(shown) ?? 0)}</span>
+        <span className="you-label">
+          {shown === today ? 'today' : dayLabel(shown, { weekday: 'short', month: 'short', day: 'numeric' })}
+        </span>
       </div>
       <dl className="you-figures">
         <div>
@@ -52,24 +70,58 @@ function You({ sessions, today }: { sessions: SessionMeta[]; today: string }) {
           <dd>{focus === null ? '–' : `${focus}%`}</dd>
         </div>
       </dl>
-      <div className="you-bars" role="img" aria-label="The last 7 days">
-        {sum.week.map((ms, i) => {
-          const day = addDays(today, i - 6)
-          const date = new Date(`${day}T12:00:00`)
-          return (
-            <div
-              key={day}
-              className="you-bar"
-              data-today={i === 6 || undefined}
-              title={`${date.toLocaleDateString([], { weekday: 'short', month: 'short', day: 'numeric' })} · ${ms > 0 ? formatStudyTime(ms) : '–'}`}
-            >
-              <span className="you-bar-track">
-                <span className="you-bar-fill" style={{ height: `${(ms / top) * 100}%` }} />
-              </span>
-              <span className="you-bar-day">{date.toLocaleDateString([], { weekday: 'narrow' })}</span>
-            </div>
-          )
-        })}
+      <div className="you-week">
+        <button
+          type="button"
+          className="you-step"
+          aria-label="Week before"
+          title="Week before"
+          disabled={!canGoBack}
+          onClick={() => setWeeksBack((w) => w + 1)}
+        >
+          ‹
+        </button>
+        <div className="you-bars" onMouseLeave={() => setPicked(null)}>
+          {week.map((ms, i) => {
+            const day = addDays(end, i - 6)
+            const long = dayLabel(day, { weekday: 'short', month: 'short', day: 'numeric' })
+            return (
+              <button
+                type="button"
+                key={day}
+                className="you-bar"
+                data-today={day === today || undefined}
+                data-picked={day === picked || undefined}
+                aria-label={`${long}: ${ms > 0 ? formatStudyTime(ms) : 'none'}`}
+                onMouseEnter={() => setPicked(day)}
+                onFocus={() => setPicked(day)}
+                onBlur={() => setPicked(null)}
+                onClick={() => setPicked(day)}
+              >
+                <span className="you-bar-track">
+                  <span className="you-bar-fill" style={{ height: `${(ms / top) * 100}%` }} />
+                </span>
+                <span className="you-bar-day">{dayLabel(day, { weekday: 'narrow' })}</span>
+              </button>
+            )
+          })}
+        </div>
+        <button
+          type="button"
+          className="you-step"
+          aria-label="Week after"
+          title="Week after"
+          disabled={weeksBack === 0}
+          onClick={() => setWeeksBack((w) => w - 1)}
+        >
+          ›
+        </button>
+        {weeksBack > 0 && (
+          <p className="you-range">
+            {dayLabel(addDays(end, -6), { month: 'short', day: 'numeric' })} –{' '}
+            {dayLabel(end, { month: 'short', day: 'numeric' })}
+          </p>
+        )}
       </div>
     </section>
   )
