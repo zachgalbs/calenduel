@@ -22,6 +22,7 @@
 
 import { Muxer, ArrayBufferTarget } from 'mp4-muxer'
 import { encodeSoundtrack, fetchSong, type EncodedSoundtrack } from './soundtrack'
+import { stashChunk, stashMeta, type Stash, type StashFormat } from './frameStash'
 
 const SAMPLE_RATE = 1    // frames captured per second of real time
 const PLAYBACK_FPS = 30  // frames shown per second on playback → 30× speedup
@@ -118,6 +119,94 @@ function fitDimensions(w: number, h: number): { width: number; height: number } 
   }
 }
 
+type VideoChunks = { chunk: EncodedVideoChunk; meta?: EncodedVideoChunkMetadata }[]
+
+// The kept frames of a session cut off by a refresh, as the encoder made them.
+function restoreChunks(carry: Stash): VideoChunks {
+  return carry.chunks.map((c, i) => ({
+    chunk: new EncodedVideoChunk(c),
+    meta: i === 0 && carry.decoderConfig ? { decoderConfig: carry.decoderConfig } : undefined,
+  }))
+}
+
+// The frame after the last one kept.
+function nextFrame(carry: Stash): number {
+  return Math.max(...carry.chunks.map((c) => Math.round(c.timestamp / FRAME_DURATION_US))) + 1
+}
+
+// A session cut off by a refresh, made into a clip from the frames that were
+// kept, without carrying on.
+export async function finishStash(carry: Stash): Promise<TimelapseResult> {
+  const frames = nextFrame(carry)
+  return muxClip(
+    { codec: carry.format.muxer, width: carry.format.width, height: carry.format.height },
+    restoreChunks(carry),
+    frames,
+    carry.layout.filter((span) => span.fromFrame < frames),
+    fetchSong(),
+  )
+}
+
+// Every encoded frame plus the song, into one MP4.
+async function muxClip(
+  videoFormat: { codec: 'avc' | 'vp9'; width: number; height: number },
+  videoChunks: VideoChunks,
+  frameCount: number,
+  layout: LayoutSpan[],
+  song: ReturnType<typeof fetchSong>,
+): Promise<TimelapseResult> {
+  const music = await soundtrackFor(song, frameCount * FRAME_DURATION_US)
+  try {
+    const muxer = new Muxer({
+      target: new ArrayBufferTarget(),
+      video: videoFormat,
+      audio: music ? { codec: music.codec, numberOfChannels: 2, sampleRate: 48_000 } : undefined,
+      fastStart: 'in-memory', // moov box up front → the Blob is seekable/playable
+    })
+    for (const { chunk, meta } of videoChunks) muxer.addVideoChunk(chunk, meta)
+    for (const { chunk, meta } of music?.chunks ?? []) muxer.addAudioChunk(chunk, meta)
+    muxer.finalize()
+    return {
+      clip: new Blob([muxer.target.buffer], { type: 'video/mp4' }),
+      problem: null,
+      layout,
+    }
+  } catch (e) {
+    console.error('timelapse finalize error', e)
+    const detail = e instanceof Error ? ` ${e.message}` : ''
+    return { clip: null, problem: `Couldn't finish the timelapse video.${detail}`, layout: [] }
+  }
+}
+
+// The song, encoded to the clip's length. Null (a silent clip) if anything
+// about the music fails or stalls — it must never cost the video.
+async function soundtrackFor(
+  song: ReturnType<typeof fetchSong>,
+  durationUs: number,
+): Promise<EncodedSoundtrack | null> {
+  try {
+    const bytes = await withTimeout(song, FLUSH_TIMEOUT_MS, 'The song never loaded.')
+    if (!bytes) return null
+    return await withTimeout(
+      encodeSoundtrack(bytes, durationUs),
+      FLUSH_TIMEOUT_MS,
+      'The song never finished encoding.',
+    )
+  } catch (e) {
+    console.error('soundtrack error', e)
+    return null
+  }
+}
+
+// Fits a source of one shape into an area of another, centred, so a resumed
+// session's screen (maybe a different one) isn't stretched.
+function fitInside(sw: number, sh: number, area: Rect): Rect {
+  const scale = Math.min(area.w / sw, area.h / sh)
+  const w = Math.round(sw * scale)
+  const h = Math.round(sh * scale)
+  return { x: area.x + Math.round((area.w - w) / 2), y: area.y + Math.round((area.h - h) / 2), w, h }
+}
+
 // Begin sampling composite frames from live <video> elements (the shared
 // screen and the webcam face, plus an optional second window such as a mirrored
 // iPad), encoding each one as it's captured. Returns a handle whose stop()
@@ -125,21 +214,32 @@ function fitDimensions(w: number, h: number): { width: number; height: number } 
 //
 // getExtra is read every tick because the second window can be added or
 // dropped mid-session; null means "screen only".
+//
+// Every frame is also kept under stash.id (see frameStash.ts). stash.carry is
+// what was kept of this session before a refresh: the clip carries on from it,
+// at its size and with its codec, so the two halves make one video.
 export function startTimelapse(
   face: HTMLVideoElement,
   screen: HTMLVideoElement,
   getExtra: () => HTMLVideoElement | null = () => null,
+  stash: { id: string; carry: Stash | null } | null = null,
 ): TimelapseRecorder {
+  let carry = stash?.carry ?? null
   // The encoder is built lazily on the first frame that actually has pixels:
   // configure() needs real dimensions, and the feed reports 0×0 until it's
   // playing. It stays null until then.
   let encoder: VideoEncoder | null = null
   // What the muxer will need at Stop, plus every encoded frame so far.
   let videoFormat: { codec: 'avc' | 'vp9'; width: number; height: number } | null = null
-  const videoChunks: { chunk: EncodedVideoChunk; meta?: EncodedVideoChunkMetadata }[] = []
+  let videoChunks: VideoChunks = []
   // Fetched now so Stop doesn't wait on the network.
   const song = fetchSong()
   let frameCount = 0
+  // What frameStash needs to rebuild this clip.
+  let stashFormat: StashFormat | null = null
+  let decoderConfig: VideoDecoderConfig | null = carry?.decoderConfig ?? null
+  // The first frame after a resume must be a keyframe: the decoder starts over.
+  let forceKey = false
   let paused = false
   // Choosing a codec is async, so frames are skipped until it settles.
   let settingUp = false
@@ -153,11 +253,38 @@ export function startTimelapse(
   // dimensions) so the VideoFrame always matches the encoder's configured size.
   const scratch = document.createElement('canvas')
   const ctx = scratch.getContext('2d')!
-  const layout: LayoutSpan[] = []
+  let layout: LayoutSpan[] = []
+
+  function keepMeta() {
+    if (stash && stashFormat) stashMeta({ id: stash.id, format: stashFormat, decoderConfig, layout })
+  }
 
   async function setup(width: number, height: number) {
     let chosen: (typeof CODECS)[number] | null = null
-    for (const option of CODECS) {
+    // Carrying on: the same size and codec, or the halves can't share a track.
+    if (carry) {
+      const { codec, width: w, height: h } = carry.format
+      const config = { codec, width: w, height: h, bitrate: BITRATE }
+      try {
+        if ((await VideoEncoder.isConfigSupported(config)).supported) {
+          chosen = { codec: carry.format.codec, muxer: carry.format.muxer }
+          width = carry.format.width
+          height = carry.format.height
+        }
+      } catch {
+        // Unsupported now: start the clip over below.
+      }
+      if (!chosen) {
+        console.warn("couldn't carry on the kept timelapse; starting it over")
+        carry = null
+        videoChunks = []
+        frameCount = 0
+        layout = []
+        decoderConfig = null
+        forceKey = false
+      }
+    }
+    for (const option of chosen ? [] : CODECS) {
       const config = { codec: option.codec, width, height, bitrate: BITRATE }
       try {
         if ((await VideoEncoder.isConfigSupported(config)).supported) {
@@ -178,9 +305,33 @@ export function startTimelapse(
     scratch.width = width
     scratch.height = height
     videoFormat = { codec: chosen.muxer, width, height }
+    stashFormat = { codec: chosen.codec, muxer: chosen.muxer, width, height }
+    keepMeta()
     const enc = new VideoEncoder({
       // Keep meta untouched — it carries the codec description the muxer needs.
-      output: (chunk, meta) => videoChunks.push({ chunk, meta }),
+      output: (chunk, meta) => {
+        const seq = videoChunks.length
+        videoChunks.push({ chunk, meta })
+        if (meta?.decoderConfig) {
+          if (decoderConfig && !sameDescription(decoderConfig, meta.decoderConfig)) {
+            console.warn('the resumed encoder describes its stream differently')
+          }
+          if (!decoderConfig || seq === 0) {
+            decoderConfig = meta.decoderConfig
+            keepMeta()
+          }
+        }
+        if (stash) {
+          const data = new ArrayBuffer(chunk.byteLength)
+          chunk.copyTo(data)
+          stashChunk(stash.id, seq, {
+            type: chunk.type,
+            timestamp: chunk.timestamp,
+            duration: chunk.duration ?? FRAME_DURATION_US,
+            data,
+          })
+        }
+      },
       error: (e) => {
         console.error('timelapse encode error', e)
         problem ??= `The video encoder stopped: ${e.message}`
@@ -222,6 +373,7 @@ export function startTimelapse(
       return
     }
     layout.push(span)
+    keepMeta()
   }
 
   // The canvas size is fixed at setup (from the laptop screen), but the second
@@ -279,8 +431,22 @@ export function startTimelapse(
     if (extra?.videoWidth) {
       panes = drawSideBySide(extra) // has pixels yet?
     } else {
-      panes = { screen: { x: 0, y: 0, w: scratch.width, h: scratch.height }, ipad: null }
-      ctx.drawImage(screen, 0, 0, scratch.width, scratch.height)
+      // Fit, not stretch: after a resume the screen can be a different shape.
+      const rect = fitInside(screen.videoWidth, screen.videoHeight, {
+        x: 0,
+        y: 0,
+        w: scratch.width,
+        h: scratch.height,
+      })
+      // Within a couple of pixels (even rounding) it's the frame's own shape.
+      const full =
+        Math.abs(rect.w - scratch.width) <= 2 && Math.abs(rect.h - scratch.height) <= 2
+      panes = { screen: full ? { x: 0, y: 0, w: scratch.width, h: scratch.height } : rect, ipad: null }
+      if (!full) {
+        ctx.fillStyle = '#000'
+        ctx.fillRect(0, 0, scratch.width, scratch.height)
+      }
+      ctx.drawImage(screen, panes.screen.x, panes.screen.y, panes.screen.w, panes.screen.h)
     }
     // Skip the inset until the camera has pixels.
     const faceRect = face.videoWidth ? drawFaceInset(panes.screen) : null
@@ -290,7 +456,8 @@ export function startTimelapse(
       duration: FRAME_DURATION_US,
     })
     try {
-      encoder.encode(frame, { keyFrame: frameCount % KEYFRAME_INTERVAL === 0 })
+      encoder.encode(frame, { keyFrame: forceKey || frameCount % KEYFRAME_INTERVAL === 0 })
+      forceKey = false
       frameCount++
     } catch (e) {
       console.error('timelapse encode error', e)
@@ -301,6 +468,14 @@ export function startTimelapse(
     }
   }, 1000 / SAMPLE_RATE)
   if (problem) stopSampling()
+
+  // Carry on from the kept frames.
+  if (carry) {
+    videoChunks = restoreChunks(carry)
+    frameCount = nextFrame(carry)
+    layout = carry.layout.filter((span) => span.fromFrame < frameCount)
+    forceKey = true
+  }
 
   // Clearing the sampling interval, idempotently — both stop() and cancel()
   // funnel through here, so calling them in any order is safe.
@@ -345,30 +520,9 @@ export function startTimelapse(
         // An error during flush may already have closed it.
         if ((encoder.state as CodecState) !== 'closed') encoder.close()
       }
-      const music = await soundtrackFor(frameCount * FRAME_DURATION_US)
-      try {
-        const muxer = new Muxer({
-          target: new ArrayBufferTarget(),
-          video: videoFormat,
-          audio: music
-            ? { codec: music.codec, numberOfChannels: 2, sampleRate: 48_000 }
-            : undefined,
-          fastStart: 'in-memory', // moov box up front → the Blob is seekable/playable
-        })
-        for (const { chunk, meta } of videoChunks) muxer.addVideoChunk(chunk, meta)
-        for (const { chunk, meta } of music?.chunks ?? []) muxer.addAudioChunk(chunk, meta)
-        muxer.finalize()
-        videoChunks.length = 0
-        return {
-          clip: new Blob([muxer.target.buffer], { type: 'video/mp4' }),
-          problem: null,
-          layout,
-        }
-      } catch (e) {
-        console.error('timelapse finalize error', e)
-        const detail = e instanceof Error ? ` ${e.message}` : ''
-        return { clip: null, problem: `Couldn't finish the timelapse video.${detail}`, layout: [] }
-      }
+      const result = await muxClip(videoFormat, videoChunks, frameCount, layout, song)
+      videoChunks.length = 0
+      return result
     },
     cancel() {
       stopSampling()
@@ -378,21 +532,14 @@ export function startTimelapse(
       videoChunks.length = 0
     },
   }
+}
 
-  // The song, encoded to the clip's length. Null (a silent clip) if anything
-  // about the music fails or stalls — it must never cost the video.
-  async function soundtrackFor(durationUs: number): Promise<EncodedSoundtrack | null> {
-    try {
-      const bytes = await withTimeout(song, FLUSH_TIMEOUT_MS, 'The song never loaded.')
-      if (!bytes) return null
-      return await withTimeout(
-        encodeSoundtrack(bytes, durationUs),
-        FLUSH_TIMEOUT_MS,
-        'The song never finished encoding.',
-      )
-    } catch (e) {
-      console.error('soundtrack error', e)
-      return null
-    }
-  }
+function sameDescription(a: VideoDecoderConfig, b: VideoDecoderConfig): boolean {
+  const bytes = (d?: AllowSharedBufferSource) =>
+    !d
+      ? ''
+      : Array.from(
+          ArrayBuffer.isView(d) ? new Uint8Array(d.buffer, d.byteOffset, d.byteLength) : new Uint8Array(d),
+        ).join()
+  return a.codec === b.codec && bytes(a.description) === bytes(b.description)
 }

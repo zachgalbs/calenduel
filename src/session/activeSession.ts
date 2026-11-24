@@ -1,7 +1,7 @@
 // A session in progress lives only in the page's memory, so a refresh or a
 // closed tab used to lose it without a trace. This keeps a small record of the
 // running session in localStorage, so the next load can offer to resume it or
-// save the time studied. The clip can't be rescued: its frames were in memory.
+// save the time studied. The clip's frames are kept apart, in media/frameStash.ts.
 
 import type { PauseState } from './elapsed'
 
@@ -17,6 +17,9 @@ export interface ActiveSession {
   // Breaks, as in session/elapsed.ts. Missing on records from before pausing.
   pausedMs?: number
   pausedAt?: number | null
+  // Where its timelapse frames are kept (media/frameStash.ts). Missing on
+  // records from before frames were kept.
+  stash?: string
 }
 
 export function pauseOf(record: ActiveSession): PauseState {

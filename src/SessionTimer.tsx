@@ -5,6 +5,8 @@ import { useTimelapseRecorder } from './session/useTimelapseRecorder'
 import { downloadBlob, timelapseName } from './media/share'
 import { DEFAULT_SESSION_NAME, SESSION_NAME_MAX, saveSession } from './db'
 import { formatStudyTime, localDay } from './compete/stats'
+import { clearStash, loadStash } from './media/frameStash'
+import { finishStash } from './media/timelapse'
 import {
   clearActive,
   HEARTBEAT_MS,
@@ -109,6 +111,10 @@ export default function SessionTimer({
   // That's what the study room gets: it banks each stretch when it ends, so
   // sending the session's start again after a break would count time twice.
   const [stretchFrom, setStretchFrom] = useState<number | null>(null)
+  // Where this session's timelapse frames are kept, so a refresh can't lose them.
+  const [stashId, setStashId] = useState<string | null>(null)
+  // Save on a cut-off session is building its clip.
+  const [rescuing, setRescuing] = useState(false)
   // The room this session sits in, and how: signed in, or as a guest. Kept
   // through a refresh (sessionStorage), so resuming finds the same table.
   const [seat, setSeat] = useState<Seat | null>(savedSeat)
@@ -209,6 +215,7 @@ export default function SessionTimer({
         tabId: tabId(),
         pausedMs: pause.pausedMs,
         pausedAt: pause.pausedAt,
+        stash: stashId ?? undefined,
       })
     beat()
     const timer = setInterval(beat, HEARTBEAT_MS)
@@ -217,7 +224,7 @@ export default function SessionTimer({
       clearInterval(timer)
       window.removeEventListener('pagehide', beat)
     }
-  }, [status, startedAt, task, pause])
+  }, [status, startedAt, task, pause, stashId])
 
   // End a break that's run too long. Through a ref, so the timer always calls
   // the current handleStop (the name can still change during a break).
@@ -258,13 +265,16 @@ export default function SessionTimer({
 
   // One click does everything: screen picker, camera, recording, stopwatch.
   // (getDisplayMedia needs this click's user gesture — it can't run on load.)
-  // resumeFrom carries on an interrupted session from its original start.
-  async function handleStart(resumeFrom?: number, pausedBefore = 0) {
+  // resumeFrom carries on an interrupted session from its original start, and
+  // resumeStash its timelapse.
+  async function handleStart(resumeFrom?: number, pausedBefore = 0, resumeStash?: string) {
     setError(null)
     setNotice(null)
     setStatus('starting')
     try {
-      await begin()
+      setStashId(await begin(resumeStash))
+      // A fresh start sets the cut-off session aside for good.
+      if (resumeFrom === undefined && interrupted?.stash) void clearStash(interrupted.stash)
       setStartedAt(resumeFrom ?? Date.now())
       setPause({ pausedMs: pausedBefore, pausedAt: null })
       setStretchFrom(Date.now())
@@ -383,22 +393,39 @@ export default function SessionTimer({
     if (!interrupted) return
     setName(interrupted.name === DEFAULT_SESSION_NAME ? '' : interrupted.name)
     // A session cut off mid-break: the time since it was cut off is break too.
-    void handleStart(interrupted.startedAt, pausedUntil(pauseOf(interrupted), Date.now()))
+    void handleStart(
+      interrupted.startedAt,
+      pausedUntil(pauseOf(interrupted), Date.now()),
+      interrupted.stash,
+    )
   }
 
-  // Keeps the time up to the last heartbeat, without a clip.
+  // Keeps the time up to the last heartbeat, with the timelapse frames kept
+  // until the cut-off.
   async function handleSaveInterrupted() {
-    if (!interrupted) return
+    if (!interrupted || rescuing) return
+    setRescuing(true)
     const elapsedMs = studiedMs(interrupted.startedAt, interrupted.lastSeen, pauseOf(interrupted))
+    const meta = { startedAt: interrupted.startedAt, task: interrupted.name, goalMs: 0, elapsedMs }
+    const kept = interrupted.stash ? await loadStash(interrupted.stash) : null
+    const { clip, layout } = kept
+      ? await finishStash(kept).catch(() => ({ clip: null, layout: [] }))
+      : { clip: null, layout: [] }
     try {
-      await saveSession(
-        { startedAt: interrupted.startedAt, task: interrupted.name, goalMs: 0, elapsedMs },
-        null,
-      )
+      try {
+        await saveSession(clip && clip.size > 0 ? { ...meta, layout } : meta, clip)
+      } catch (e) {
+        if (!clip) throw e
+        console.error('saving the rescued clip failed', e)
+        await saveSession(meta, null) // the time, at least
+      }
     } catch {
       setError("This session couldn't be saved on this device.")
+      setRescuing(false)
       return
     }
+    setRescuing(false)
+    if (interrupted.stash) void clearStash(interrupted.stash)
     clearActive()
     sortIntoSubject()
     setInterrupted(null)
@@ -407,6 +434,7 @@ export default function SessionTimer({
   }
 
   function handleDiscardInterrupted() {
+    if (interrupted?.stash) void clearStash(interrupted.stash)
     clearActive()
     setInterrupted(null)
   }
@@ -454,6 +482,8 @@ export default function SessionTimer({
     const validClip = saved && recorded && recorded.size > 0 ? recorded : null
     if (saved) {
       clearActive()
+      void clearStash(stashId)
+      setStashId(null)
       setUploadingFor(startedAt)
       void Promise.resolve(onSessionSaved?.()).finally(() =>
         setUploadingFor((s) => (s === startedAt ? null : s)),
@@ -649,12 +679,22 @@ export default function SessionTimer({
           </p>
           <div className="session-recover-actions">
             {Date.now() - interrupted.lastSeen < RESUME_WINDOW_MS && (
-              <button type="button" className="session-stop" onClick={handleResume}>
+              <button
+                type="button"
+                className="session-stop"
+                onClick={handleResume}
+                disabled={rescuing}
+              >
                 Resume
               </button>
             )}
-            <button type="button" className="session-stop" onClick={handleSaveInterrupted}>
-              Save
+            <button
+              type="button"
+              className="session-stop"
+              onClick={handleSaveInterrupted}
+              disabled={rescuing}
+            >
+              {rescuing ? 'Saving…' : 'Save'}
             </button>
             <button
               type="button"
@@ -662,6 +702,7 @@ export default function SessionTimer({
               aria-label="Discard"
               title="Discard"
               onClick={handleDiscardInterrupted}
+              disabled={rescuing}
             >
               <XIcon />
             </button>

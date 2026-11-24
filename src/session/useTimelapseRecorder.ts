@@ -11,6 +11,7 @@ import {
   type TimelapseRecorder,
   type TimelapseResult,
 } from '../media/timelapse'
+import { loadStash, type Stash } from '../media/frameStash'
 
 // Encapsulates the camera + screen + timelapse lifecycle for a study session.
 // Both streams live in STATE so that setting them mounts the face <video>;
@@ -25,6 +26,9 @@ import {
 interface Streams {
   face: MediaStream
   screen: MediaStream
+  // Where the frames are kept as they're made, and what was kept before a
+  // refresh (see media/frameStash.ts).
+  stash: { id: string; carry: Stash | null }
 }
 
 export interface RecorderHandle {
@@ -32,8 +36,10 @@ export interface RecorderHandle {
   // True once both feeds are live — gate the preview on this.
   streaming: boolean
   // Acquire screen + camera and start recording. Rejects if either is denied,
-  // which the caller uses to block the session from starting.
-  begin: () => Promise<void>
+  // which the caller uses to block the session from starting. resumeStash is
+  // the kept frames of a session cut off by a refresh, to carry the clip on
+  // from. Resolves with the id this session's frames are kept under.
+  begin: (resumeStash?: string | null) => Promise<string>
   // Add the iPad mid-session. Uses the iPad helper when it has one plugged in,
   // otherwise a second shared window (e.g. QuickTime mirroring an iPad). Call
   // straight from a click. Cancelling the picker is a no-op, not an error.
@@ -129,7 +135,7 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     void face.play().catch(() => {})
     const screen = mountHiddenVideo(streams.screen)
     // A getter, not the element: the iPad can be added or dropped mid-session.
-    const timelapse = startTimelapse(face, screen, () => ipadVideoRef.current)
+    const timelapse = startTimelapse(face, screen, () => ipadVideoRef.current, streams.stash)
     timelapseRef.current = timelapse
     liveRef.current = true
 
@@ -241,7 +247,7 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
     setIpad(stream)
   }, [])
 
-  const begin = useCallback(async () => {
+  const begin = useCallback(async (resumeStash?: string | null) => {
     // Screen first: getDisplayMedia needs the click's transient activation, and
     // awaiting the camera first would spend it. If the user cancels the screen
     // picker this throws and we never touch the camera.
@@ -253,7 +259,11 @@ export function useTimelapseRecorder(onInterrupted: () => void): RecorderHandle 
       stopStream(screen) // don't leave the screen share running on camera denial
       throw err
     }
-    setStreams({ face, screen })
+    // Read after the pickers: awaiting it first would spend the click.
+    const carry = resumeStash ? await loadStash(resumeStash) : null
+    const id = carry ? carry.id : crypto.randomUUID()
+    setStreams({ face, screen, stash: { id, carry } })
+    return id
   }, [])
 
   const setPaused = useCallback((paused: boolean) => {
