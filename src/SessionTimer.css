@@ -164,15 +164,22 @@
   display: block;
 }
 
-/* Remove the iPad from the frame: shown when you hover its preview. */
+/* Enlarge / remove the iPad: shown when you hover its preview. */
 .session-ipad-wrap {
   position: relative;
 }
 
-.session-ipad-remove {
+.session-ipad-tools {
   position: absolute;
   top: 6px;
   right: 6px;
+  display: flex;
+  gap: 6px;
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.session-ipad-tool {
   width: 28px;
   height: 28px;
   display: flex;
@@ -183,13 +190,45 @@
   border-radius: 50%;
   color: #fff;
   background: rgba(0, 0, 0, 0.6);
-  opacity: 0;
-  transition: opacity 0.2s ease;
 }
 
-.session-ipad-wrap:hover .session-ipad-remove,
-.session-ipad-remove:focus-visible {
+.session-ipad-wrap:hover .session-ipad-tools,
+.session-ipad-tools:focus-within {
   opacity: 1;
+}
+
+/* Big: the iPad fills the screen (less a margin) at its own shape, under the
+   camera tile and Stop. For screenshots, so as many pixels as fit. */
+.session-ipad-wrap[data-big='true'] {
+  position: fixed;
+  inset: 1rem;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+.session-ipad-wrap[data-big='true'] > .session-ipad {
+  width: auto;
+  height: auto;
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 8px;
+  pointer-events: auto;
+}
+
+.session-ipad-wrap[data-big='true'] .session-ipad-tools {
+  pointer-events: auto;
+}
+
+.session:has(.session-ipad-wrap[data-big='true']) .session-stage {
+  z-index: 2;
+}
+
+.session:has(.session-ipad-wrap[data-big='true']) .session-actions {
+  position: relative;
+  z-index: 2;
 }
 
 /* Add iPad: a + over the camera, shown when you hover it. */

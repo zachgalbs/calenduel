@@ -26,6 +26,14 @@ export function PlusIcon({ size }: { size?: number }) {
   return <Icon size={size}><path d="M12 5v14M5 12h14" /></Icon>
 }
 
+export function ExpandIcon({ size }: { size?: number }) {
+  return <Icon size={size}><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7" /></Icon>
+}
+
+export function ShrinkIcon({ size }: { size?: number }) {
+  return <Icon size={size}><path d="M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7" /></Icon>
+}
+
 export function CheckIcon({ size }: { size?: number }) {
   return <Icon size={size}><path d="M20 6 9 17l-5-5" /></Icon>
 }

@@ -26,7 +26,7 @@ let ALLOWED_ORIGINS = SITE_ORIGINS.union(["http://localhost:5173", "http://127.0
 #else
 let ALLOWED_ORIGINS = SITE_ORIGINS
 #endif
-let MAX_SIDE: CGFloat = 1600 // long side of served frames; the timelapse pane is smaller
+let MAX_SIDE: CGFloat = 2752 // long side of served frames: full iPad resolution, for the big preview
 let MAX_FPS = 4.0 // frames encoded per second at most; the page polls ~2/s
 let IDLE_STOP = 10.0 // seconds without a frame request before capture stops
 let SITE = URL(string: "https://calenduel.com/?ipadHelper=1")!
@@ -162,7 +162,7 @@ final class IPadCapture: NSObject, AVCaptureVideoDataOutputSampleBufferDelegate 
     if scale < 1 { image = image.transformed(by: CGAffineTransform(scaleX: scale, y: scale)) }
     guard let space = CGColorSpace(name: CGColorSpace.sRGB),
           let jpeg = ci.jpegRepresentation(of: image, colorSpace: space,
-            options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.75])
+            options: [CIImageRepresentationOption(rawValue: kCGImageDestinationLossyCompressionQuality as String): 0.9])
     else { return }
     let frame = Frame(jpeg: jpeg, width: Int(image.extent.width.rounded()),
                       height: Int(image.extent.height.rounded()), at: Date())

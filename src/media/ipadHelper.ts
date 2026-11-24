@@ -14,7 +14,7 @@ const PARAM = 'ipadHelper'
 // One frame a second, the timelapse's own rate. Faster polling starved it: a
 // hidden tab gets a small budget for timer work, and at two polls a second the
 // recorder's 1 s tick ran only every other second (29 frames a minute, not 58).
-const POLL_MS = 1000
+const POLL_MS = 500
 // Consecutive failed frame requests before the iPad counts as gone.
 const MAX_MISSES = 3
 

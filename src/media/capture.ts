@@ -37,7 +37,8 @@ export async function startWindow(): Promise<MediaStream> {
     throw new Error('Screen capture is not supported in this browser')
   }
   return navigator.mediaDevices.getDisplayMedia({
-    video: { displaySurface: 'window' },
+    // Ask for full resolution: Chrome otherwise may hand back a scaled-down window.
+    video: { displaySurface: 'window', width: { ideal: 4096 }, height: { ideal: 4096 }, frameRate: { ideal: 30 } },
     audio: false,
   })
 }

@@ -17,7 +17,7 @@ import {
 import RoomPanel, { SoloTable } from './room/RoomPanel'
 import RoomInvite from './room/RoomInvite'
 import { guestSecret } from './room/guest'
-import { PlusIcon, XIcon } from './icons'
+import { ExpandIcon, PlusIcon, ShrinkIcon, XIcon } from './icons'
 import { saveSeat, savedSeat, type Seat } from './room/useRoom'
 import { sortSessions } from './subjects/sort'
 import { liveSpan, NOT_PAUSED, pausedUntil, studiedMs, type PauseState } from './session/elapsed'
@@ -132,6 +132,23 @@ export default function SessionTimer({
     interruptedSession(Date.now()),
   )
   const [notice, setNotice] = useState<string | null>(null)
+  // The iPad blown up to fill most of the screen (for screenshots). Remembered.
+  const [bigIpad, setBigIpad] = useState(() => {
+    try {
+      return localStorage.getItem(BIG_IPAD_KEY) === '1'
+    } catch {
+      return false
+    }
+  })
+  function toggleBigIpad() {
+    const big = !bigIpad
+    setBigIpad(big)
+    try {
+      localStorage.setItem(BIG_IPAD_KEY, big ? '1' : '0')
+    } catch {
+      // Storage blocked: it just isn't remembered.
+    }
+  }
 
   // Destructured into locals: the refs lint rule can't classify properties read
   // off the returned object, but a bare ref passed to a ref prop is fine.
@@ -485,6 +502,32 @@ export default function SessionTimer({
     if (clip) downloadBlob(clip, timelapseName(clip, task))
   }
 
+  const ipadTile = ipadStream && (
+    <div className="session-ipad-wrap" data-big={bigIpad}>
+      <StreamPreview stream={ipadStream} className="session-ipad" />
+      <div className="session-ipad-tools">
+        <button
+          type="button"
+          className="session-ipad-tool"
+          aria-label={bigIpad ? 'Shrink iPad' : 'Enlarge iPad'}
+          title={bigIpad ? 'Shrink iPad' : 'Enlarge iPad'}
+          onClick={toggleBigIpad}
+        >
+          {bigIpad ? <ShrinkIcon /> : <ExpandIcon />}
+        </button>
+        <button
+          type="button"
+          className="session-ipad-tool"
+          aria-label="Remove iPad"
+          title="Remove iPad"
+          onClick={removeIpad}
+        >
+          <XIcon />
+        </button>
+      </div>
+    </div>
+  )
+
   return (
     // Switch to the focus layout only once the feed is live. Keying it to
     // inProgress would flip it during 'starting', while the permission
@@ -493,8 +536,10 @@ export default function SessionTimer({
       {/* Camera-only preview. The screen is recorded but never shown — a live
           preview of your own screen reflects itself forever. Shown whenever
           the feeds are live (running + encoding). */}
+      {/* Big: the iPad fills most of the screen, the camera stays in its corner. */}
+      {streaming && bigIpad && ipadTile}
       {streaming && (
-        <div className="session-stage reveal" data-ipad={ipadStream !== null}>
+        <div className="session-stage reveal" data-ipad={ipadStream !== null && !bigIpad}>
           <video
             ref={faceVideoRef}
             className="session-face"
@@ -516,22 +561,7 @@ export default function SessionTimer({
             </button>
           )}
           {/* Below the face: you look down at the iPad. */}
-          {ipadStream && (
-            <div className="session-ipad-wrap">
-              <StreamPreview stream={ipadStream} className="session-ipad" />
-              <button
-                type="button"
-                className="session-ipad-remove"
-                aria-label="Remove iPad"
-                title="Remove iPad"
-                onClick={removeIpad}
-              >
-                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" aria-hidden="true">
-                  <path d="M18 6 6 18M6 6l12 12" />
-                </svg>
-              </button>
-            </div>
-          )}
+          {!bigIpad && ipadTile}
         </div>
       )}
 
@@ -662,6 +692,8 @@ export default function SessionTimer({
     </section>
   )
 }
+
+const BIG_IPAD_KEY = 'calenduel.bigIpad'
 
 // Plays a live stream in a <video>. srcObject can't be set as a JSX prop, so it's
 // attached after mount. One stream can feed several <video>s at once, so this
